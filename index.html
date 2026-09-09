@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#141716" />
+    <title>Bottleography — One night, one version</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <main>
+        <div class="game-grid">
+          <section class="main-column" aria-label="Scene and conversation">
+            <div class="scene">
+              <canvas
+                id="world"
+                width="480"
+                height="240"
+                aria-label="Pixel art of a shadowed stranger at a dim bar table"
+              ></canvas>
+              <div class="scene-label">
+                <span class="ember-dot"></span
+                ><span id="scene-caption">THE LAST LIGHT</span>
+              </div>
+              <div class="scene-bottom">
+                <span id="atmosphere"
+                  >Rain outside. Something older inside.</span
+                ><span>01 — I</span>
+              </div>
+            </div>
+            <section class="dialogue">
+              <div class="speaker">
+                <span id="speaker">THE STRANGER</span
+                ><span id="line-count">OFF THE RECORD</span>
+              </div>
+              <button
+                id="spoken"
+                class="spoken"
+                aria-label="Stranger's last line"
+              ></button>
+              <div id="dialogue-actions" class="dialogue-actions"></div>
+              <p id="notice" role="status"></p>
+            </section>
+            <section id="interaction" class="interaction"></section>
+          </section>
+          <aside id="journal" class="journal"></aside>
+        </div>
+      </main>
+    </div>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
