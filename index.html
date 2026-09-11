@@ -1,53 +1,45 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <meta name="theme-color" content="#141716" />
-    <title>Bottleography — One night, one version</title>
-    <link rel="stylesheet" href="./style.css" />
-  </head>
-  <body>
-    <div class="shell">
-      <main>
-        <div class="game-grid">
-          <section class="main-column" aria-label="Scene and conversation">
-            <div class="scene">
-              <canvas
-                id="world"
-                width="480"
-                height="240"
-                aria-label="Pixel art of a shadowed stranger at a dim bar table"
-              ></canvas>
-              <div class="scene-label">
-                <span class="ember-dot"></span
-                ><span id="scene-caption">THE LAST LIGHT</span>
-              </div>
-              <div class="scene-bottom">
-                <span id="atmosphere"
-                  >Rain outside. Something older inside.</span
-                ><span>01 — I</span>
-              </div>
-            </div>
-            <section class="dialogue">
-              <div class="speaker">
-                <span id="speaker">THE STRANGER</span
-                ><span id="line-count">OFF THE RECORD</span>
-              </div>
-              <button
-                id="spoken"
-                class="spoken"
-                aria-label="Stranger's last line"
-              ></button>
-              <div id="dialogue-actions" class="dialogue-actions"></div>
-              <p id="notice" role="status"></p>
-            </section>
-            <section id="interaction" class="interaction"></section>
-          </section>
-          <aside id="journal" class="journal"></aside>
-        </div>
-      </main>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="theme-color" content="#080e0b" />
+  <title>Bottleography — One night, one version</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <main class="novel" aria-label="Bottleography visual novel">
+    <div class="scene">
+      <div class="scene-stage">
+        <canvas id="world" width="480" height="240" aria-label="A parcel on your desk"></canvas>
+        <button id="lamp-secret" aria-label="Tap the lamp"></button>
+        <button id="parcel-hotspot" class="hotspot parcel-hotspot" aria-label="Untie the parcel"><span>Untie the parcel</span></button>
+        <button id="diary-hotspot" class="hotspot diary-hotspot" aria-label="Open the journal"><span>Read the journal · J</span></button>
+        <button id="manuscript-hotspot" class="hotspot manuscript-hotspot" aria-label="Read your manuscript"><span>Read your manuscript · M</span></button>
+      </div>
     </div>
-    <script type="module" src="./app.js"></script>
-  </body>
+    <nav class="scene-tools" aria-label="Scene tools">
+      <button id="journal-toggle" aria-haspopup="dialog">Journal <kbd>J</kbd></button>
+      <button id="fullscreen-toggle" aria-label="Enter fullscreen">⛶</button>
+    </nav>
+    <div class="story-ui">
+      <section class="dialogue" aria-label="Dialogue">
+        <div class="speaker"><span id="speaker">THE WRITER</span><span id="line-count">ONE NIGHT</span></div>
+        <button id="spoken" class="spoken" aria-label="Reveal dialogue"><span id="spoken-text"></span></button>
+        <p id="continue-cue" class="continue-cue" aria-hidden="true">Click to reveal</p>
+      </section>
+      <section id="responses" aria-label="Your response" hidden>
+        <div class="response-heading"><span>YOUR RESPONSE</span><button id="review-line">Read the line again</button></div>
+        <div id="dialogue-actions" class="dialogue-actions"></div>
+        <section id="interaction" class="interaction"></section>
+      </section>
+      <p id="notice" role="status"></p>
+    </div>
+    <dialog id="journal-dialog" aria-label="Journal pages">
+      <button id="journal-close" class="journal-close" aria-label="Close journal">Close · Esc</button>
+      <article id="journal" class="journal"></article>
+    </dialog>
+  </main>
+  <script type="module" src="./app.js"></script>
+</body>
 </html>

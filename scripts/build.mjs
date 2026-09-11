@@ -1,6 +1,10 @@
-import { mkdir, readFile, writeFile, copyFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile, copyFile, readdir } from "node:fs/promises";
+import { dirname } from "node:path";
 // ZIP store format keeps the distributable reproducible and dependency-free.
 const files = ["index.html", "style.css", "app.js", "story.js", "scenery.js"];
+for (const name of (await readdir("assets")).sort()) {
+  if (name.endsWith(".png")) files.push(`assets/${name}`);
+}
 await mkdir("dist", { recursive: true });
 await mkdir("release", { recursive: true });
 const crc32 = (data) => {
@@ -15,6 +19,7 @@ const local = [],
   central = [];
 let offset = 0;
 for (const file of files) {
+  await mkdir(dirname("dist/" + file), { recursive: true });
   await copyFile(file, "dist/" + file);
   const data = await readFile(file),
     name = Buffer.from(file),

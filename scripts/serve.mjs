@@ -9,6 +9,7 @@ const mime = {
   ".png": "image/png",
 };
 const port = Number(process.env.PORT || 5173);
+const host = process.env.HOST || "0.0.0.0";
 createServer(async (req, res) => {
   try {
     const path = resolve(
@@ -30,6 +31,6 @@ createServer(async (req, res) => {
     res.writeHead(404);
     res.end("Not found");
   }
-}).listen(port, "0.0.0.0", () =>
-  console.log(`Bottleography: http://localhost:${port}`),
+}).listen(port, host, () =>
+  console.log(`Bottleography: http://${host}:${port}`),
 );

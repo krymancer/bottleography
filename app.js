@@ -14,9 +14,12 @@ import { startScenery } from "./scenery.js";
 const $ = (id) => document.getElementById(id);
 let state = freshState();
 let openingIndex = 0;
+let parcelOpened = false;
 let timer = null,
   fullLine = "",
   typing = false;
+let lineGeneration = 0;
+let selectionPending = false;
 let audio = null;
 let audioUnlocked = false;
 const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -26,6 +29,24 @@ function sfx(kind) {
     audio ??= new (window.AudioContext || window.webkitAudioContext)();
     if (audio.state === "suspended") void audio.resume().catch(() => {});
     const t = audio.currentTime;
+    if (kind === "spark") {
+      const buffer = audio.createBuffer(1, Math.ceil(audio.sampleRate * 0.65), audio.sampleRate);
+      const samples = buffer.getChannelData(0);
+      for (let i = 0; i < samples.length; i++) {
+        const seconds = i / audio.sampleRate;
+        const burst = Math.exp(-seconds * 28) + (seconds > 0.32 ? Math.exp(-(seconds - 0.32) * 35) * 0.6 : 0);
+        samples[i] = (Math.random() * 2 - 1) * burst * 0.16;
+      }
+      const source = audio.createBufferSource(), filter = audio.createBiquadFilter();
+      source.buffer = buffer;
+      filter.type = "bandpass";
+      filter.frequency.value = 1800;
+      filter.Q.value = 0.7;
+      source.connect(filter); filter.connect(audio.destination);
+      source.onended = () => { source.disconnect(); filter.disconnect(); };
+      source.start(t);
+      return;
+    }
     const o = audio.createOscillator(),
       g = audio.createGain();
     o.connect(g);
@@ -55,24 +76,56 @@ function btn(text, fn, cls = "") {
   const b = document.createElement("button");
   b.textContent = text;
   b.className = cls;
-  b.onclick = () => {
+  b.onclick = async () => {
+    if (selectionPending) return;
     sfx("tick");
-    fn();
+    const responses = $("responses");
+    if (!reduce && b.closest("#responses") && fn !== openJournal) {
+      selectionPending = true;
+      responses.inert = true;
+      const generation = lineGeneration;
+      try {
+        await responses.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 140 }).finished;
+        if (generation === lineGeneration) fn();
+      } finally {
+        responses.inert = false;
+        selectionPending = false;
+      }
+    } else fn();
   };
   return b;
 }
 function notice(text = "") {
   $("notice").textContent = text;
 }
+function showDialogue() {
+  document.body.dataset.presentation = "dialogue";
+  document.querySelector(".dialogue").hidden = false;
+  $("responses").hidden = true;
+  document.querySelector(".story-ui").scrollTop = 0;
+}
+function showResponses() {
+  finishLine();
+  document.body.dataset.presentation = "choices";
+  document.querySelector(".dialogue").hidden = true;
+  $("responses").hidden = false;
+  document.querySelector(".story-ui").scrollTop = 0;
+  const next = $("responses").querySelector("#dialogue-actions button:not(:disabled), .question:not(:disabled), .choice, .opening-next, #end-actions button");
+  next?.focus({ preventScroll: true });
+}
 function finishLine() {
   clearInterval(timer);
   typing = false;
-  $("spoken").textContent = fullLine;
+  $("spoken-text").textContent = fullLine;
   $("spoken").classList.remove("typing");
+  $("continue-cue").textContent = "Click or Space to respond ▸";
 }
 function say(text) {
+  lineGeneration++;
+  showDialogue();
   clearInterval(timer);
   fullLine = text;
+  $("spoken").dataset.fullLine = text;
   notice();
   $("spoken").classList.remove("pinnable");
   $("spoken").setAttribute("aria-label", text);
@@ -82,11 +135,12 @@ function say(text) {
   }
   typing = true;
   let n = 0;
-  $("spoken").textContent = "";
+  $("spoken-text").textContent = "";
   $("spoken").classList.add("typing");
+  $("continue-cue").textContent = "Click or Space to reveal";
   timer = setInterval(() => {
     n += 2;
-    $("spoken").textContent = text.slice(0, n);
+    $("spoken-text").textContent = text.slice(0, n);
     if (n % 6 === 0) sfx("tick");
     if (n >= text.length) finishLine();
   }, 22);
@@ -176,6 +230,7 @@ function finishQuestion() {
   renderBar();
 }
 function goDesk() {
+  closeJournal();
   finishLine();
   if (state.stage === "claim") {
     judge(state, "slide");
@@ -188,15 +243,53 @@ function goDesk() {
   renderDesk();
   window.scrollTo({ top: 0, behavior: reduce ? "instant" : "smooth" });
 }
+function closeJournal() {
+  if ($("journal-dialog").open) $("journal-dialog").close();
+}
+function openJournal() {
+  if (!$("journal-dialog").open) $("journal-dialog").showModal();
+}
+function openParcel() {
+  finishLine();
+  parcelOpened = true;
+  intro();
+}
+function inspectDiary() {
+  if (state.stage === "intro" && openingIndex === 0) {
+    if (!parcelOpened) { openParcel(); return; }
+    openingIndex = 1;
+    intro();
+  }
+  if (state.scene !== "bar") journal();
+  openJournal();
+}
+function inspectManuscript() {
+  if (state.scene === "bar") return;
+  draft();
+  openJournal();
+}
+function nextOpening() {
+  finishLine();
+  if (openingIndex === 0) {
+    if (!parcelOpened) openParcel();
+    else inspectDiary();
+  } else if (openingIndex < opening.length - 1) {
+    closeJournal();
+    openingIndex++;
+    intro();
+  } else {
+    state.stage = "idle";
+    beginInterview();
+    sfx("glass");
+  }
+}
 function heading(scene) {
   document.body.dataset.scene = scene;
+  document.body.dataset.stage = state.stage;
+  const parcel = state.stage === "intro" && openingIndex < 2;
+  document.body.dataset.view = parcel ? (parcelOpened ? "parcel-open" : "parcel-closed") : scene;
+  $("journal-toggle").innerHTML = `${parcel && !parcelOpened ? "Parcel" : "Journal"} <kbd>J</kbd>`;
   document.body.classList.toggle("opening", state.stage === "intro");
-  $("scene-caption").textContent =
-    scene === "bar" ? "THE LAST LIGHT" : "A ROOM ABOVE THE STREET";
-  $("atmosphere").textContent =
-    scene === "bar"
-      ? "Rain outside. Something older inside."
-      : "A blank page is not an innocent thing.";
   $("world").setAttribute(
     "aria-label",
     scene === "bar"
@@ -219,25 +312,24 @@ function journal() {
         state.held = state.held === i ? null : i;
         notice();
         renderBar();
+        closeJournal();
+        showDialogue();
+        if (state.stage === "claim" && state.held !== null) $("continue-cue").textContent = "Click this line to pin the contradiction";
+        $("spoken").focus({ preventScroll: true });
         if (state.held !== null) {
           notice(
             state.stage === "claim"
               ? "Scrap held. Click his last line or “Pin contradiction”."
               : "Scrap held. Listen for a line that clashes.",
           );
-          if (matchMedia("(max-width: 740px)").matches) {
-            $("spoken").scrollIntoView({
-              behavior: reduce ? "instant" : "smooth",
-              block: "center",
-            });
-          }
+
         }
       },
       "scrap" + (state.held === i ? " selected" : ""),
     );
     b.setAttribute("aria-pressed", String(state.held === i));
-    b.disabled = state.stage === "intro" || state.round === "introductions";
-    b.innerHTML = `<small>${String(i + 1).padStart(2, "0")} / ${scrap.date}</small><p>${scrap.text}</p><span class="scrap-state">${b.disabled ? "FOR WHEN YOU REACH THE PAGES" : state.held === i ? "◆ HELD · CLICK AGAIN TO RELEASE" : pinned ? "↗ PINNED IN YOUR NOTES" : "+ HOLD THIS SCRAP"}</span>`;
+    b.disabled = state.scene !== "bar" || state.stage === "intro" || state.round === "introductions";
+    b.innerHTML = `<img class="evidence-art" src="./assets/evidence-${["fire", "key", "river"][i]}.png" alt="" width="24" height="24"><small>${String(i + 1).padStart(2, "0")} / ${scrap.date}</small><p>${scrap.text}</p><span class="scrap-state">${b.disabled ? (state.scene !== "bar" ? "FROM THE JOURNAL" : "FOR WHEN YOU REACH THE PAGES") : state.held === i ? "◆ HELD · CLICK AGAIN TO RELEASE" : pinned ? "↗ PINNED IN YOUR NOTES" : "+ HOLD THIS SCRAP"}</span>`;
     j.append(b);
   });
   const hint = document.createElement("p");
@@ -277,12 +369,8 @@ function renderBar() {
     actions([
       ["↗ Pin contradiction", () => decide("pin"), "pin"],
       [
-        "Read journal ↓",
-        () =>
-          $("journal").scrollIntoView({
-            behavior: reduce ? "instant" : "smooth",
-            block: "start",
-          }),
+        "Read journal · J",
+        openJournal,
       ],
       ["Believe him", () => decide("believe")],
       ["Let it slide", () => decide("slide")],
@@ -413,12 +501,22 @@ function renderEnd() {
   actions([]);
   const area = $("interaction");
   area.innerHTML = `<article class="end-card"><div class="chip">${tone.toUpperCase()}</div><span class="eyebrow">THE VERSION YOU WROTE</span><h2>${end.title}</h2><p>${end.text}</p><p class="stat">${end.percent}% of players chose ${tone}.</p><small>Illustrative POC statistic · No player data collected.</small><div id="end-actions"></div></article><details class="feedback"><summary>Finished? Four questions for the friend test ↗</summary><ol><li>Could you tell what you were supposed to do?</li><li>Did pinning feel satisfying or fussy?</li><li>Did writing feel like your choice mattered?</li><li>Would you sit down for a second night?</li></ol><p class="beat-prompt">Your run: ${Math.max(1, Math.round((Date.now() - state.started) / 60000))} minutes. Share your answers with whoever sent you this.</p></details>`;
+  const recap = document.createElement("div");
+  recap.className = "ending-manuscript";
+  state.picks.forEach((pick) => {
+    const line = document.createElement("p");
+    line.textContent = pick.text;
+    recap.append(line);
+  });
+  area.querySelector(".end-card .stat").before(recap);
   $("end-actions").append(
     btn(
       "Write another version ↻",
       () => {
         state = freshState();
         openingIndex = 0;
+        parcelOpened = false;
+        closeJournal();
         intro();
         window.scrollTo({ top: 0, behavior: reduce ? "instant" : "smooth" });
       },
@@ -434,10 +532,10 @@ function intro() {
   $("world").setAttribute(
     "aria-label",
     openingIndex < 2
-      ? "Pixel art of a dim bar, rain at the window and an empty-looking table"
+      ? (parcelOpened ? "An opened parcel with a leather journal and a folded letter" : "A paper-wrapped parcel tied with string on a dark wooden table")
       : "A stranger slowly becomes visible in the shadows at the bar table",
   );
-  say(page.text);
+  say(openingIndex === 0 && parcelOpened ? "Under the string: a battered diary and a letter. No signature. You lift the cover; the paper smells faintly of river water. Click the diary to read what survived." : page.text);
   actions([]);
   journal();
   if (openingIndex === 0) {
@@ -445,21 +543,8 @@ function intro() {
       '<div class="journal-top"><span>THREE NIGHTS AGO</span><span>NO RETURN ADDRESS</span></div><h2>An invitation.</h2><p class="draft-line">You write lives for a living.<br><br>I am having trouble remembering mine.<br><br>The Last Light. Thursday. Before midnight.<br><br>Bring the pages. Come alone.</p><p class="intro">No signature. Just a journal, wrapped in the letter.</p>';
   }
   $("interaction").replaceChildren(
-    btn(
-      page.next,
-      () => {
-        finishLine();
-        if (openingIndex < opening.length - 1) {
-          openingIndex++;
-          intro();
-        } else {
-          state.stage = "idle";
-          beginInterview();
-          sfx("glass");
-        }
-      },
-      "primary opening-next",
-    ),
+    btn(openingIndex === 0 ? (parcelOpened ? "Read the diary →" : "Untie the parcel →") : page.next,
+      nextOpening, "primary opening-next"),
   );
 }
 function beginInterview() {
@@ -473,8 +558,15 @@ $("spoken").onclick = () => {
     finishLine();
     return;
   }
-  if (state.stage === "claim" && state.scene === "bar" && state.held !== null)
+  if (state.stage === "claim" && state.scene === "bar" && state.held !== null) {
     decide("pin");
+    return;
+  }
+  showResponses();
+};
+$("review-line").onclick = () => {
+  showDialogue();
+  $("spoken").focus({ preventScroll: true });
 };
 function unlockAudio() {
   if (audioUnlocked) return;
@@ -483,8 +575,40 @@ function unlockAudio() {
 }
 document.addEventListener("pointerdown", unlockAudio, { capture: true });
 document.addEventListener("keydown", unlockAudio, { capture: true });
+$("parcel-hotspot").onclick = openParcel;
+$("diary-hotspot").onclick = inspectDiary;
+$("manuscript-hotspot").onclick = inspectManuscript;
+$("journal-toggle").onclick = inspectDiary;
+$("journal-close").onclick = closeJournal;
+$("journal-dialog").addEventListener("click", (event) => {
+  if (event.target === $("journal-dialog")) {
+    const r = event.target.getBoundingClientRect();
+    if (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom) closeJournal();
+  }
+});
+$("fullscreen-toggle").onclick = async () => {
+  try {
+    if (document.fullscreenElement) await document.exitFullscreen();
+    else await document.documentElement.requestFullscreen();
+  } catch { notice("Fullscreen isn’t available in this browser. The scene still fills the window."); }
+};
+document.addEventListener("fullscreenchange", () => {
+  $("fullscreen-toggle").setAttribute("aria-label", document.fullscreenElement ? "Exit fullscreen" : "Enter fullscreen");
+});
 document.addEventListener("keydown", (e) => {
+  if (e.code === "Space" && !e.repeat && !$("journal-dialog").open && document.body.dataset.presentation === "dialogue" && !e.target.closest("button")) {
+    e.preventDefault(); $("spoken").click(); return;
+  }
+  if (e.key.toLowerCase() === "m" && !e.ctrlKey && !e.metaKey && !e.altKey && state.scene !== "bar") {
+    e.preventDefault(); inspectManuscript(); return;
+  }
+  if (e.key.toLowerCase() === "j" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    e.preventDefault();
+    if ($("journal-dialog").open) closeJournal(); else inspectDiary();
+    return;
+  }
   if (e.key === "Escape") {
+    if ($("journal-dialog").open) { e.preventDefault(); closeJournal(); return; }
     finishLine();
     if (state.scene === "bar" && state.stage !== "intro") {
       state.held = null;
@@ -493,9 +617,12 @@ document.addEventListener("keydown", (e) => {
     }
   }
 });
-startScenery(
+const scenery = startScenery(
   $("world"),
-  () => state.scene,
+  () => state.stage === "intro" && openingIndex < 2 ? (parcelOpened ? "parcel-open" : "parcel-closed") : state.scene,
   () => (state.stage === "intro" && openingIndex < 2 ? 0 : 1),
 );
+$("lamp-secret").onclick = () => {
+  if (scenery.tapLamp()) sfx("spark");
+};
 intro();
