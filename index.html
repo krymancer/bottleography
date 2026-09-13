@@ -14,29 +14,29 @@
         <canvas id="world" width="480" height="240" aria-label="A parcel on your desk"></canvas>
         <button id="lamp-secret" aria-label="Tap the lamp"></button>
         <button id="parcel-hotspot" class="hotspot parcel-hotspot" aria-label="Untie the parcel"><span>Untie the parcel</span></button>
-        <button id="diary-hotspot" class="hotspot diary-hotspot" aria-label="Open the journal"><span>Read the journal · J</span></button>
-        <button id="manuscript-hotspot" class="hotspot manuscript-hotspot" aria-label="Read your manuscript"><span>Read your manuscript · M</span></button>
+        <button id="diary-hotspot" class="hotspot diary-hotspot" aria-label="Open the journal"><span>Read the journal <kbd>J</kbd></span></button>
+        <button id="manuscript-hotspot" class="hotspot manuscript-hotspot" aria-label="Read your manuscript"><span>Read your manuscript <kbd>M</kbd></span></button>
       </div>
     </div>
     <nav class="scene-tools" aria-label="Scene tools">
-      <button id="journal-toggle" aria-haspopup="dialog">Journal <kbd>J</kbd></button>
-      <button id="fullscreen-toggle" aria-label="Enter fullscreen">⛶</button>
+      <button id="journal-toggle" aria-haspopup="dialog"><i class="ico ico-book"></i><span id="journal-toggle-label">Journal</span> <kbd>J</kbd></button>
+      <button id="fullscreen-toggle" aria-label="Enter fullscreen"><i class="ico ico-fullscreen"></i></button>
     </nav>
-    <div class="story-ui">
+    <div class="story-ui frame">
       <section class="dialogue" aria-label="Dialogue">
-        <div class="speaker"><span id="speaker">THE WRITER</span><span id="line-count">ONE NIGHT</span></div>
+        <div class="speaker"><span id="speaker" class="plate">THE WRITER</span><span id="line-count">ONE NIGHT</span></div>
         <button id="spoken" class="spoken" aria-label="Reveal dialogue"><span id="spoken-text"></span></button>
-        <p id="continue-cue" class="continue-cue" aria-hidden="true">Click to reveal</p>
+        <p class="continue-cue" aria-hidden="true"><span id="continue-cue">Click to reveal</span><i class="ico ico-continue dim"></i></p>
       </section>
       <section id="responses" aria-label="Your response" hidden>
-        <div class="response-heading"><span>YOUR RESPONSE</span><button id="review-line">Read the line again</button></div>
+        <div class="response-heading"><span>YOUR RESPONSE</span><button id="review-line"><i class="ico ico-replay dim"></i>Read the line again</button></div>
         <div id="dialogue-actions" class="dialogue-actions"></div>
         <section id="interaction" class="interaction"></section>
       </section>
       <p id="notice" role="status"></p>
     </div>
     <dialog id="journal-dialog" aria-label="Journal pages">
-      <button id="journal-close" class="journal-close" aria-label="Close journal">Close · Esc</button>
+      <button id="journal-close" class="journal-close" aria-label="Close journal">Close <kbd>Esc</kbd><i class="ico ico-close"></i></button>
       <article id="journal" class="journal"></article>
     </dialog>
   </main>

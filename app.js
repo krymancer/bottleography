@@ -72,9 +72,26 @@ function sfx(kind) {
     // Audio support must not block the story.
   }
 }
+// Pixel icons come from assets/ui-icons.png (see art/source/ui.lua). tone: "" | "dim" | "ember" | "ink".
+function icon(name, tone = "") {
+  const i = document.createElement("i");
+  i.className = `ico ico-${name}${tone ? " " + tone : ""}`;
+  i.setAttribute("aria-hidden", "true");
+  return i;
+}
+function iconHTML(name, tone = "") {
+  return icon(name, tone).outerHTML;
+}
+// A label with an icon after (default) or before the text.
+function label(text, name, { before = false, tone = "" } = {}) {
+  const f = document.createDocumentFragment();
+  if (before) f.append(icon(name, tone), text);
+  else f.append(text, icon(name, tone));
+  return f;
+}
 function btn(text, fn, cls = "") {
   const b = document.createElement("button");
-  b.textContent = text;
+  b.append(text);
   b.className = cls;
   b.onclick = async () => {
     if (selectionPending) return;
@@ -118,7 +135,7 @@ function finishLine() {
   typing = false;
   $("spoken-text").textContent = fullLine;
   $("spoken").classList.remove("typing");
-  $("continue-cue").textContent = "Click or Space to respond ▸";
+  $("continue-cue").textContent = "Click or Space to respond";
 }
 function say(text) {
   lineGeneration++;
@@ -288,7 +305,7 @@ function heading(scene) {
   document.body.dataset.stage = state.stage;
   const parcel = state.stage === "intro" && openingIndex < 2;
   document.body.dataset.view = parcel ? (parcelOpened ? "parcel-open" : "parcel-closed") : scene;
-  $("journal-toggle").innerHTML = `${parcel && !parcelOpened ? "Parcel" : "Journal"} <kbd>J</kbd>`;
+  $("journal-toggle-label").textContent = parcel && !parcelOpened ? "Parcel" : "Journal";
   document.body.classList.toggle("opening", state.stage === "intro");
   $("world").setAttribute(
     "aria-label",
@@ -300,7 +317,7 @@ function heading(scene) {
 function journal() {
   const j = $("journal");
   j.innerHTML =
-    '<div class="journal-top"><span>EXHIBIT 01</span><span>↗ FOUND, NOT GIVEN</span></div><h2>A borrowed memory.</h2><p class="intro">Three lines from a water-damaged journal. The handwriting feels almost familiar.</p>';
+    '<div class="journal-top"><span>EXHIBIT 01</span><span>' + iconHTML("pin", "ink") + 'FOUND, NOT GIVEN</span></div><h2>A borrowed memory.</h2><p class="intro">Three lines from a water-damaged journal. The handwriting feels almost familiar.</p>';
   scraps.forEach((scrap, i) => {
     const pinned = state.decisions.some(
       (d) => d.action === "pin" && questions[d.question].scrap === i,
@@ -329,7 +346,7 @@ function journal() {
     );
     b.setAttribute("aria-pressed", String(state.held === i));
     b.disabled = state.scene !== "bar" || state.stage === "intro" || state.round === "introductions";
-    b.innerHTML = `<img class="evidence-art" src="./assets/evidence-${["fire", "key", "river"][i]}.png" alt="" width="24" height="24"><small>${String(i + 1).padStart(2, "0")} / ${scrap.date}</small><p>${scrap.text}</p><span class="scrap-state">${b.disabled ? (state.scene !== "bar" ? "FROM THE JOURNAL" : "FOR WHEN YOU REACH THE PAGES") : state.held === i ? "◆ HELD · CLICK AGAIN TO RELEASE" : pinned ? "↗ PINNED IN YOUR NOTES" : "+ HOLD THIS SCRAP"}</span>`;
+    b.innerHTML = `<img class="evidence-art" src="./assets/evidence-${["fire", "key", "river"][i]}.png" alt="" width="24" height="24"><small>${String(i + 1).padStart(2, "0")} / ${scrap.date}</small><p>${scrap.text}</p><span class="scrap-state">${b.disabled ? (state.scene !== "bar" ? "FROM THE JOURNAL" : "FOR WHEN YOU REACH THE PAGES") : state.held === i ? iconHTML("diamond", "ember") + "HELD. CLICK AGAIN TO RELEASE" : pinned ? iconHTML("pin", "ink") + "PINNED IN YOUR NOTES" : iconHTML("arrow", "ink") + "HOLD THIS SCRAP"}</span>`;
     j.append(b);
   });
   const hint = document.createElement("p");
@@ -345,7 +362,7 @@ function journal() {
   if (!state.decisions.length) notes.innerHTML += "<p>No judgments. Yet.</p>";
   state.decisions.forEach((d) => {
     const p = document.createElement("p");
-    p.textContent = `${d.action === "pin" ? "↗" : d.action === "believe" ? "+" : "—"} ${questions[d.question].topic.toLowerCase()} · ${d.action === "pin" ? "contradiction pinned" : d.action === "believe" ? "account believed" : "left unresolved"}`;
+    p.append(icon(d.action === "pin" ? "pin" : d.action === "believe" ? "check" : "close", "ink"), `${questions[d.question].topic.toLowerCase()}: ${d.action === "pin" ? "contradiction pinned" : d.action === "believe" ? "account believed" : "left unresolved"}`);
     notes.append(p);
   });
   j.append(notes);
@@ -364,33 +381,30 @@ function renderBar() {
     "pinnable",
     state.stage === "claim" && state.held !== null,
   );
-  if (state.stage === "answer") actions([["Keep listening →", showClaim]]);
+  if (state.stage === "answer") actions([[label("Keep listening", "arrow"), showClaim]]);
   else if (state.stage === "claim")
     actions([
-      ["↗ Pin contradiction", () => decide("pin"), "pin"],
-      [
-        "Read journal · J",
-        openJournal,
-      ],
+      [label("Pin contradiction", "pin", { before: true, tone: "ember" }), () => decide("pin"), "pin"],
+      [label("Read the journal", "book", { before: true }), openJournal],
       ["Believe him", () => decide("believe")],
       ["Let it slide", () => decide("slide")],
     ]);
   else if (state.stage === "reaction")
-    actions([["Back to your questions →", finishQuestion]]);
+    actions([[label("Back to your questions", "arrow"), finishQuestion]]);
   else actions([]);
   const area = $("interaction");
   area.innerHTML = `<div class="section-label"><span>YOUR QUESTIONS</span><span>${state.asked.length} / 4 ASKED</span></div>`;
   questions.forEach((question, i) => {
     const done = state.asked.includes(i);
     const b = btn("", () => ask(i), "question" + (done ? " done" : ""));
-    b.innerHTML = `<span class="number">${done ? "✓" : String(i + 1).padStart(2, "0")}</span><span>${question.short}</span><span class="arrow">${done ? "" : "↗"}</span>`;
+    b.innerHTML = `<span class="number">${String(i + 1).padStart(2, "0")}</span><span>${question.short}</span>`;
     b.disabled = done || ["answer", "claim", "reaction"].includes(state.stage);
     area.append(b);
   });
   const row = document.createElement("div");
   row.className = "leave-row";
   row.innerHTML = "<p>You don’t have to ask everything.</p>";
-  row.append(btn("Leave & write →", goDesk, "primary"));
+  row.append(btn(label("Leave & write", "pen"), goDesk, "primary"));
   area.append(row);
 }
 function renderIntroductions() {
@@ -402,7 +416,7 @@ function renderIntroductions() {
       [introductions[state.currentIntroduction].followUp, followUpIntroduction],
     ]);
   } else if (state.stage === "introduction-reply") {
-    actions([["Ask something else →", finishIntroduction]]);
+    actions([[label("Ask something else", "arrow"), finishIntroduction]]);
   } else actions([]);
   const area = $("interaction");
   area.innerHTML =
@@ -414,15 +428,15 @@ function renderIntroductions() {
       () => askIntroduction(i),
       "question" + (done ? " done" : ""),
     );
-    b.innerHTML = `<span class="number">${done ? "✓" : String(i + 1).padStart(2, "0")}</span><span>${question.short}</span><span class="arrow">${done ? "" : "↗"}</span>`;
+    b.innerHTML = `<span class="number">${String(i + 1).padStart(2, "0")}</span><span>${question.short}</span>`;
     b.disabled = done || state.stage !== "idle";
     area.append(b);
   });
   const row = document.createElement("div");
   row.className = "leave-row";
   row.append(
-    btn("Leave & write →", goDesk),
-    btn("About the journal →", beginJournalQuestions, "primary"),
+    btn(label("Leave & write", "pen"), goDesk),
+    btn(label("About the journal", "book"), beginJournalQuestions, "primary"),
   );
   area.append(row);
 }
@@ -449,7 +463,7 @@ function draft() {
   notes.innerHTML = "<strong>FROM THE INTERVIEW</strong>";
   for (const d of state.decisions) {
     const p = document.createElement("p");
-    p.textContent = `${questions[d.question].topic.toLowerCase()} — ${d.action === "pin" ? "contradiction pinned" : d.action === "believe" ? "believed" : "unresolved"}`;
+    p.append(icon(d.action === "pin" ? "pin" : d.action === "believe" ? "check" : "close", "ink"), `${questions[d.question].topic.toLowerCase()}: ${d.action === "pin" ? "contradiction pinned" : d.action === "believe" ? "believed" : "unresolved"}`);
     notes.append(p);
   }
   if (!state.decisions.length)
@@ -500,7 +514,7 @@ function renderEnd() {
   );
   actions([]);
   const area = $("interaction");
-  area.innerHTML = `<article class="end-card"><div class="chip">${tone.toUpperCase()}</div><span class="eyebrow">THE VERSION YOU WROTE</span><h2>${end.title}</h2><p>${end.text}</p><p class="stat">${end.percent}% of players chose ${tone}.</p><small>Illustrative POC statistic · No player data collected.</small><div id="end-actions"></div></article><details class="feedback"><summary>Finished? Four questions for the friend test ↗</summary><ol><li>Could you tell what you were supposed to do?</li><li>Did pinning feel satisfying or fussy?</li><li>Did writing feel like your choice mattered?</li><li>Would you sit down for a second night?</li></ol><p class="beat-prompt">Your run: ${Math.max(1, Math.round((Date.now() - state.started) / 60000))} minutes. Share your answers with whoever sent you this.</p></details>`;
+  area.innerHTML = `<article class="end-card"><div class="chip">${tone.toUpperCase()}</div><span class="eyebrow">THE VERSION YOU WROTE</span><h2>${end.title}</h2><p>${end.text}</p><p class="stat">${end.percent}% of players chose ${tone}.</p><small>Illustrative POC statistic. No player data collected.</small><div id="end-actions"></div></article><details class="feedback"><summary>${iconHTML("arrow", "dim")}Finished? Four questions for the friend test</summary><ol><li>Could you tell what you were supposed to do?</li><li>Did pinning feel satisfying or fussy?</li><li>Did writing feel like your choice mattered?</li><li>Would you sit down for a second night?</li></ol><p class="beat-prompt">Your run: ${Math.max(1, Math.round((Date.now() - state.started) / 60000))} minutes. Share your answers with whoever sent you this.</p></details>`;
   const recap = document.createElement("div");
   recap.className = "ending-manuscript";
   state.picks.forEach((pick) => {
@@ -511,7 +525,7 @@ function renderEnd() {
   area.querySelector(".end-card .stat").before(recap);
   $("end-actions").append(
     btn(
-      "Write another version ↻",
+      label("Write another version", "replay"),
       () => {
         state = freshState();
         openingIndex = 0;
@@ -543,7 +557,7 @@ function intro() {
       '<div class="journal-top"><span>THREE NIGHTS AGO</span><span>NO RETURN ADDRESS</span></div><h2>An invitation.</h2><p class="draft-line">You write lives for a living.<br><br>I am having trouble remembering mine.<br><br>The Last Light. Thursday. Before midnight.<br><br>Bring the pages. Come alone.</p><p class="intro">No signature. Just a journal, wrapped in the letter.</p>';
   }
   $("interaction").replaceChildren(
-    btn(openingIndex === 0 ? (parcelOpened ? "Read the diary →" : "Untie the parcel →") : page.next,
+    btn(label(openingIndex === 0 ? (parcelOpened ? "Read the diary" : "Untie the parcel") : page.next, "arrow"),
       nextOpening, "primary opening-next"),
   );
 }

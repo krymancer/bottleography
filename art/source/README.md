@@ -23,6 +23,10 @@ source; open the individual 1920 × 240 sheets to edit all four effect frames.
 | `paper.png`, `grain.png` | Repeating journal and dark surface textures |
 | `seal.png` | Wax bottle seal for the invitation and ending |
 | `evidence-*.png` | Fire, chapel key, river illustrations |
+| `ui-frame.png`, `ui-frame-paper.png` | 9-slice dialogue frame (brass, walnut, rivets) and stitched-leather journal frame; slice 6 |
+| `ui-button.png`, `ui-button-hover.png`, `ui-nameplate.png`, `ui-choice.png` | Small 9-slice chrome for tool buttons, the speaker tag and choice rows |
+| `ui-icons.png` | 8 × 8 icon sheet: arrow, check, pin, diamond, continue, pen, book, close, fullscreen, replay; rows are brass, dim, ember and ink |
+| `ui-divider.png` | Stitched horizontal rule |
 
 `assets/` holds browser-ready PNGs. `scenery.js` preloads all scene images and
 composites them with nearest-neighbor scaling. Reduced motion freezes the
@@ -45,8 +49,13 @@ Or directly from the project root:
 
 ```bash
 ~/.local/bin/aseprite --batch --script-param root="$PWD" --script art/source/scenes.lua
+~/.local/bin/aseprite --batch --script-param root="$PWD" --script art/source/ui.lua
 npm run build
 ```
+
+`ui.lua` draws the interface chrome (frames, buttons, icons) at 1x. `style.css`
+scales it with the `--px` custom property and `border-image`, so every UI edge
+stays on the same pixel grid as the scene.
 
 This art uses the original bottle in `art/experiments/bottle/bottle.png` as an
 input. Aseprite and the MCP are development tools; players only download PNGs.

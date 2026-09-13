@@ -4,7 +4,7 @@ A browser visual novel about interviewing a man whose memories have outlived the
 
 [Play in your browser](https://krymancer.github.io/bottleography/).
 
-Plain JavaScript, HTML/CSS, and a 480 × 240 canvas. No engine, runtime packages, external fonts, analytics, or backend. The scenery and journal decorations use locally bundled Aseprite pixel art. Python is only needed for the optional MCP development tooling. Sound is synthesized locally: glass, lighter, text/typewriter ticks.
+Plain JavaScript, HTML/CSS, and a 480 × 240 canvas. No engine, runtime packages, analytics, or backend. Nothing loads from a third-party host: the scenery, the dialogue frames, buttons and icons are locally bundled Aseprite pixel art, and the two pixel typefaces ([Pixelify Sans](https://fonts.google.com/specimen/Pixelify+Sans) for prose, [Jersey 10](https://fonts.google.com/specimen/Jersey+10) for labels, both SIL OFL) ship in `assets/fonts`. Python is only needed for the optional MCP development tooling. Sound is synthesized locally: glass, lighter, text/typewriter ticks.
 
 ## Play locally
 
@@ -68,7 +68,7 @@ Official references: [itch access control](https://itch.io/docs/creators/access-
 - Highest total locks one chip. Ties follow the most recent written choice among the tied tones.
 - End percentages are explicitly marked illustrative: Hero 35%, Monster 42%, Nobody 23%. Nothing is collected.
 
-`scenery.js` composites Aseprite scene layers, four-frame rain/smoke sheets, and a localized mask for occasional bar-lamp flicker. Both the bar and writing room use native 480 × 240 artwork. The opening reveal and reduced-motion support are preserved. Editable sources and regeneration instructions are in [art/source](art/source/README.md). `style.css` controls the readable paper-and-shadow UI. `app.js` handles presentation and interaction; rules live separately so they can be tested without a browser.
+`scenery.js` composites Aseprite scene layers, four-frame rain/smoke sheets, and a localized mask for occasional bar-lamp flicker. Both the bar and writing room use native 480 × 240 artwork. The opening reveal and reduced-motion support are preserved. Editable sources and regeneration instructions are in [art/source](art/source/README.md). `style.css` scales the pixel UI chrome by a `--px` unit (3 px, 2 px on narrow screens, 4 px on wide ones) so frames, icons and type stay on one grid; the UI sprites come from `art/source/ui.lua`. `app.js` handles presentation and interaction; rules live separately so they can be tested without a browser.
 
 An optional [Aseprite + MCP art experiment](art/experiments/README.md) creates an editable bottle sprite and transparent PNG exports. Its development tools are separate from the browser game.
 

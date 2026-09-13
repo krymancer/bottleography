@@ -2,17 +2,17 @@ export const opening = [
   {
     title: "A letter without a name.",
     text: "You write other people’s lives for a living. Usually, the dead ones. Three nights ago, a package arrived at your door: a damaged journal and a letter from a man who says he is forgetting his own life. He wants you to write it before it disappears.",
-    next: "Unwrap the journal →",
+    next: "Unwrap the journal",
   },
   {
     title: "The dates cannot be right.",
     text: "Most of the journal is ruined. Three passages still mention a village called Bellwether, a fire, and a man who should have died. The dates put him three centuries in the past. A hoax, probably. But you copied the passages and came to hear his version.",
-    next: "Find the last table →",
+    next: "Find the last table",
   },
   {
     title: "Someone is waiting in the dark.",
     text: "The Last Light smells of wet coats and yesterday’s smoke. At the back, a cigarette ember lifts. Your eyes adjust around it: a hand, a shoulder, a man watching you. You set the journal on the table. Tonight, you listen. Back home, you will decide what makes it onto the page.",
-    next: "Take a seat →",
+    next: "Take a seat",
   },
 ];
 
@@ -46,17 +46,17 @@ export const introductions = [
 export const scraps = [
   {
     title: "THE FIRE",
-    date: "17 OCTOBER · 1683",
+    date: "17 OCTOBER 1683",
     text: "He carried the lamp into the grain house. By dawn, Bellwether was ash.",
   },
   {
     title: "THE LOCK",
-    date: "18 OCTOBER · 1683",
+    date: "18 OCTOBER 1683",
     text: "Mara put the chapel key in his palm. Six people were still behind the door.",
   },
   {
     title: "THE RIVER",
-    date: "19 OCTOBER · 1683",
+    date: "19 OCTOBER 1683",
     text: "He came out of the river with a child. The ferryman found no pulse in him.",
   },
 ];

@@ -5,6 +5,9 @@ const files = ["index.html", "style.css", "app.js", "story.js", "scenery.js"];
 for (const name of (await readdir("assets")).sort()) {
   if (name.endsWith(".png")) files.push(`assets/${name}`);
 }
+for (const name of (await readdir("assets/fonts")).sort()) {
+  if (name.endsWith(".ttf") || name.endsWith(".txt")) files.push(`assets/fonts/${name}`);
+}
 await mkdir("dist", { recursive: true });
 await mkdir("release", { recursive: true });
 const crc32 = (data) => {
