@@ -6,17 +6,25 @@ const thought = (text, fx) => ({ kind: "thought", text, fx });
 const narr = (text, fx) => ({ kind: "narr", text, fx });
 
 export const asides = {
-  "opening-0": [thought("Usually, the dead ones. You have never once asked yourself how they got that way.")],
-  parcel: [thought("The letter leans to the right, the way yours does. The g’s close in a little loop, the way yours do. Lots of people write like that. Lots.")],
-  "opening-1": [thought("The paper smells of river water. So do the cuffs of your coat. They have for as long as you can remember, which is not, now you think about it, very long.")],
+  "opening-0": [thought("You write other people’s lives for a living. Usually, the dead ones. You have never once asked yourself how they got that way.")],
+  letter: [
+    thought("The letter leans to the right, the way yours does. The g’s close in a little loop, the way yours do. Lots of people write like that. Lots."),
+    thought("The last table. Thursday, before midnight. You already know you’re going."),
+  ],
+  diary: [
+    thought("A borrowed memory. Three entries the water didn’t take, and a warning it couldn’t. The handwriting feels almost familiar."),
+    thought("The pages smell of river water. So do the cuffs of your coat. They have for as long as you can remember, which is not, now you think about it, very long."),
+  ],
   "opening-2": [
     narr("He doesn’t look up when the door opens. Under the brim there is no face to speak of: a jaw, when the ember lifts, and then nothing again."),
     thought("Wet coats. Warm necks. You count them without meaning to. The barkeep. The man in the dark. That’s all there is tonight.", "heartbeat"),
   ],
   interview: [thought("You know the end of that sentence. You’ve heard it before, across this same table.", "glitch")],
-  "intro-0-reply": [narr("He says it smiling. The ember shows you the smile and nothing above it.")],
+  "intro-0-reply": [narr("He taps the cover once, the way you would touch a sleeping dog you weren’t sure of.")],
+  "intro-1-answer": [thought("A photograph in a coat pocket. Don’t check your pocket.")],
   "intro-1-reply": [thought("A house by the sea. A door that sticks in wet weather; you have to lift it on the hinge. How do you know that?")],
-  "intro-2-answer": [thought("A photograph in a coat pocket. Don’t check your pocket.")],
+  "intro-2-reply": [thought("You have never sent him a word in your own hand. Not one.", "glitch")],
+  "intro-3-reply": [narr("He says it smiling. The ember shows you the smile and nothing above it.")],
   "journal-round": [narr("He stops turning the glass. Something in the dark under his hat stops moving with it.")],
   "q-0-answer": [narr("He smiles when he says counting. It is the first time he has smiled at anything.")],
   "q-0-pinned": [
