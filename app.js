@@ -7,636 +7,515 @@ import {
   dominant,
   judge,
   pickBeat,
+  doDeed as markDeed,
   opening,
   introductions,
+  leaveBar,
+  resolveNightfall,
+  epilogues,
+  shelf,
 } from "./story.js";
-import { startScenery } from "./scenery.js";
+import { asides, deeds, nightfall } from "./asides.js";
+import { startWorld } from "./world3d.js";
+import { sfx, unlock, ambience } from "./audio.js";
+
 const $ = (id) => document.getElementById(id);
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
 let state = freshState();
 let openingIndex = 0;
 let parcelOpened = false;
-let timer = null,
-  fullLine = "",
-  typing = false;
-let lineGeneration = 0;
-let selectionPending = false;
-let audio = null;
-let audioUnlocked = false;
-const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
-function sfx(kind) {
-  if (!audioUnlocked) return;
-  try {
-    audio ??= new (window.AudioContext || window.webkitAudioContext)();
-    if (audio.state === "suspended") void audio.resume().catch(() => {});
-    const t = audio.currentTime;
-    if (kind === "spark") {
-      const buffer = audio.createBuffer(1, Math.ceil(audio.sampleRate * 0.65), audio.sampleRate);
-      const samples = buffer.getChannelData(0);
-      for (let i = 0; i < samples.length; i++) {
-        const seconds = i / audio.sampleRate;
-        const burst = Math.exp(-seconds * 28) + (seconds > 0.32 ? Math.exp(-(seconds - 0.32) * 35) * 0.6 : 0);
-        samples[i] = (Math.random() * 2 - 1) * burst * 0.16;
-      }
-      const source = audio.createBufferSource(), filter = audio.createBiquadFilter();
-      source.buffer = buffer;
-      filter.type = "bandpass";
-      filter.frequency.value = 1800;
-      filter.Q.value = 0.7;
-      source.connect(filter); filter.connect(audio.destination);
-      source.onended = () => { source.disconnect(); filter.disconnect(); };
-      source.start(t);
-      return;
-    }
-    const o = audio.createOscillator(),
-      g = audio.createGain();
-    o.connect(g);
-    g.connect(audio.destination);
-    const presets = {
-      tick: [135, 0.018, 0.025],
-      glass: [1700, 0.45, 0.06],
-      lighter: [85, 0.13, 0.08],
-      pin: [430, 0.16, 0.09],
-    };
-    const [freq, duration, volume] = presets[kind] || presets.tick;
-    o.type = kind === "tick" || kind === "lighter" ? "square" : "sine";
-    o.frequency.setValueAtTime(freq, t);
-    o.frequency.exponentialRampToValueAtTime(
-      Math.max(30, freq * 0.48),
-      t + duration,
-    );
-    g.gain.setValueAtTime(volume, t);
-    g.gain.exponentialRampToValueAtTime(0.001, t + duration);
-    o.start(t);
-    o.stop(t + duration);
-  } catch {
-    // Audio support must not block the story.
-  }
+let queue = [];
+let after = null;
+let typing = null;
+let waiting = false;
+let generation = 0;
+let titleTimer = 0;
+
+// ——— Subtitles: one line at a time, bottom centre ———
+function escape(text) {
+  return text.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 }
-// Pixel icons come from assets/ui-icons.png (see art/source/ui.lua). tone: "" | "dim" | "ember" | "ink".
-function icon(name, tone = "") {
-  const i = document.createElement("i");
-  i.className = `ico ico-${name}${tone ? " " + tone : ""}`;
-  i.setAttribute("aria-hidden", "true");
-  return i;
+const rich = (text) => escape(text).replace(/\*(.+?)\*/g, "<em>$1</em>");
+const narr = (text, extra = {}) => ({ kind: "narr", text, ...extra });
+const line = (text, who = "THE STRANGER") => ({ who, text });
+const title = (text) => ({ kind: "title", text });
+const you = (text) => ({ kind: "you", text });
+const aside = (id) => asides[id] ?? [];
+const kindOf = (e) => e.kind ?? (e.who ? "line" : "narr");
+function whoLabel(e) {
+  const kind = kindOf(e);
+  if (kind === "you") return "YOU";
+  if (kind === "line") return e.who;
+  return "";
 }
-function iconHTML(name, tone = "") {
-  return icon(name, tone).outerHTML;
+function setSubtitle(e) {
+  const sub = $("subtitle");
+  const kind = kindOf(e);
+  const who = whoLabel(e);
+  sub.className = `subtitle ${kind}${e.who === "THE STRANGER" ? " stranger" : ""}`;
+  sub.innerHTML = `${who ? `<span class="who">${escape(who)}</span>` : ""}<span class="body"></span>`;
+  return sub.querySelector(".body");
 }
-// A label with an icon after (default) or before the text.
-function label(text, name, { before = false, tone = "" } = {}) {
-  const f = document.createDocumentFragment();
-  if (before) f.append(icon(name, tone), text);
-  else f.append(text, icon(name, tone));
-  return f;
+function finishTyping() {
+  if (!typing) return false;
+  const t = typing;
+  typing = null;
+  clearInterval(t.timer);
+  t.body.innerHTML = rich(t.text);
+  t.done();
+  return true;
 }
-function btn(text, fn, cls = "") {
-  const b = document.createElement("button");
-  b.append(text);
-  b.className = cls;
-  b.onclick = async () => {
-    if (selectionPending) return;
-    sfx("tick");
-    const responses = $("responses");
-    if (!reduce && b.closest("#responses") && fn !== openJournal) {
-      selectionPending = true;
-      responses.inert = true;
-      const generation = lineGeneration;
-      try {
-        await responses.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 140 }).finished;
-        if (generation === lineGeneration) fn();
-      } finally {
-        responses.inert = false;
-        selectionPending = false;
-      }
-    } else fn();
-  };
-  return b;
-}
-function notice(text = "") {
-  $("notice").textContent = text;
-}
-function showDialogue() {
-  document.body.dataset.presentation = "dialogue";
-  document.querySelector(".dialogue").hidden = false;
-  $("responses").hidden = true;
-  document.querySelector(".story-ui").scrollTop = 0;
-}
-function showResponses() {
-  finishLine();
-  document.body.dataset.presentation = "choices";
-  document.querySelector(".dialogue").hidden = true;
-  $("responses").hidden = false;
-  document.querySelector(".story-ui").scrollTop = 0;
-  const next = $("responses").querySelector("#dialogue-actions button:not(:disabled), .question:not(:disabled), .choice, .opening-next, #end-actions button");
-  next?.focus({ preventScroll: true });
-}
-function finishLine() {
-  clearInterval(timer);
-  typing = false;
-  $("spoken-text").textContent = fullLine;
-  $("spoken").classList.remove("typing");
-  $("continue-cue").textContent = "Click or Space to respond";
-}
-function say(text) {
-  lineGeneration++;
-  showDialogue();
-  clearInterval(timer);
-  fullLine = text;
-  $("spoken").dataset.fullLine = text;
-  notice();
-  $("spoken").classList.remove("pinnable");
-  $("spoken").setAttribute("aria-label", text);
+function say(e, done) {
+  const body = setSubtitle(e);
   if (reduce) {
-    finishLine();
-    return;
+    body.innerHTML = rich(e.text);
+    return done();
   }
-  typing = true;
   let n = 0;
-  $("spoken-text").textContent = "";
-  $("spoken").classList.add("typing");
-  $("continue-cue").textContent = "Click or Space to reveal";
-  timer = setInterval(() => {
+  typing = { body, text: e.text, done };
+  typing.timer = setInterval(() => {
     n += 2;
-    $("spoken-text").textContent = text.slice(0, n);
-    if (n % 6 === 0) sfx("tick");
-    if (n >= text.length) finishLine();
+    body.textContent = e.text.slice(0, n).replace(/\*/g, "");
+    if (n % 12 === 0 && kindOf(e) === "typed") sfx("tick");
+    if (n >= e.text.length) finishTyping();
   }, 22);
 }
-function actions(items) {
-  $("dialogue-actions").replaceChildren(
-    ...items.map(([label, fn, cls]) => btn(label, fn, cls)),
-  );
+function showTitle(text) {
+  const card = $("title-card");
+  card.textContent = text;
+  card.classList.remove("show");
+  void card.offsetWidth;
+  card.classList.add("show");
+  clearTimeout(titleTimer);
+  titleTimer = setTimeout(() => card.classList.remove("show"), 3600);
 }
-function ask(i) {
-  if (state.asked.includes(i)) {
+function play(entries, choices) {
+  generation++;
+  finishTyping();
+  queue = entries.filter(Boolean);
+  after = choices;
+  next();
+}
+function next() {
+  waiting = false;
+  $("subtitle").classList.remove("waiting");
+  hideChoices();
+  const e = queue.shift();
+  if (!e) {
+    const list = typeof after === "function" ? after() : after;
+    if (list) showChoices(list);
     return;
   }
-  finishLine();
-  state.current = i;
-  state.asked.push(i);
-  state.stage = "answer";
-  say(questions[i].answer);
-  renderBar();
-  sfx("glass");
-}
-function askIntroduction(i) {
-  if (state.introductionsAsked.includes(i)) return;
-  state.currentIntroduction = i;
-  state.introductionsAsked.push(i);
-  state.stage = "introduction-answer";
-  say(introductions[i].answer);
-  renderBar();
-}
-function followUpIntroduction() {
-  state.stage = "introduction-reply";
-  say(introductions[state.currentIntroduction].reply);
-  renderBar();
-}
-function finishIntroduction() {
-  state.currentIntroduction = null;
-  state.stage = "idle";
-  say(
-    "He rests his cigarette on the edge of the ashtray and waits for your next question.",
-  );
-  renderBar();
-}
-function beginJournalQuestions() {
-  state.round = "journal";
-  state.stage = "idle";
-  state.currentIntroduction = null;
-  state.held = null;
-  say(
-    "You turn the copied pages toward him. He stops turning his glass. “All right. What does she say I did?”",
-  );
-  renderBar();
-}
-function showClaim() {
-  finishLine();
-  state.stage = "claim";
-  say(questions[state.current].claim);
-  renderBar();
-}
-function decide(action) {
-  finishLine();
-  if (!judge(state, action)) {
-    notice(
-      state.held === null
-        ? "Hold a journal scrap first."
-        : "That scrap doesn’t contradict this line. Try another, or let it slide.",
-    );
-    return;
+  cue(e);
+  record(e);
+  if (e.kind === "title") {
+    showTitle(e.text);
+    return next();
   }
-  const q = questions[state.current];
-  say(
-    q[action === "pin" ? "pinned" : action === "believe" ? "believed" : "slid"],
-  );
-  renderBar();
-  if (action === "pin") {
-    sfx("pin");
-    notice("Contradiction pinned. His account is in your notes.");
+  const g = generation;
+  say(e, () => {
+    if (g !== generation) return;
+    // Your own line hands straight back to him, the way a conversation does.
+    if (e.kind === "you" && queue.length) return setTimeout(() => g === generation && !typing && next(), 700);
+    if (queue.length) {
+      waiting = true;
+      $("subtitle").classList.add("waiting");
+    } else next();
+  });
+}
+function advance() {
+  if (finishTyping()) return;
+  if (waiting) {
+    sfx("tick");
+    next();
   }
 }
-function finishQuestion() {
-  finishLine();
-  state.stage = "idle";
-  state.current = null;
-  state.held = null;
-  say(
-    "He turns his glass a quarter turn. The rain fills the silence between you.",
-  );
-  renderBar();
+function cue(e) {
+  if (!e.fx) return;
+  world.cue(e.fx);
+  sfx(e.fx === "vanish" ? "glitch" : e.fx);
 }
-function goDesk() {
-  closeJournal();
-  finishLine();
-  if (state.stage === "claim") {
-    judge(state, "slide");
-  } else if (state.stage === "answer") {
-    state.decisions.push({ question: state.current, action: "slide" });
-  }
-  state.scene = "desk";
-  state.held = null;
-  sfx("lighter");
-  renderDesk();
-  window.scrollTo({ top: 0, behavior: reduce ? "instant" : "smooth" });
+function hideChoices() {
+  $("choices").replaceChildren();
 }
-function closeJournal() {
-  if ($("journal-dialog").open) $("journal-dialog").close();
+function showChoices(list) {
+  const items = list.filter(Boolean).map((c, i) => {
+    const li = document.createElement("li");
+    const b = document.createElement("button");
+    b.className = `choice ${c.cls ?? ""}`;
+    b.disabled = !!c.done;
+    b.innerHTML = `<span class="num">${i + 1}</span><span class="text">${rich(c.text)}</span>`;
+    b.onclick = (event) => {
+      event.stopPropagation();
+      if (b.disabled) return;
+      sfx("tick");
+      if (!c.keep) hideChoices();
+      c.fn();
+    };
+    li.append(b);
+    return li;
+  });
+  $("choices").replaceChildren(...items);
+  $("choices").querySelector("button:not(:disabled)")?.focus({ preventScroll: true });
 }
-function openJournal() {
-  if (!$("journal-dialog").open) $("journal-dialog").showModal();
+
+// ——— History: everything said tonight ———
+function record(e) {
+  const p = document.createElement("p");
+  const kind = kindOf(e);
+  p.className = `entry ${kind}`;
+  const who = whoLabel(e);
+  p.innerHTML = (who ? `<span class="who">${escape(who)}</span> ` : "") + rich(e.text);
+  $("history").append(p);
 }
-function openParcel() {
-  finishLine();
-  parcelOpened = true;
-  intro();
+function place(text) {
+  const el = $("place");
+  el.textContent = text;
+  el.classList.remove("show");
+  void el.offsetWidth;
+  el.classList.add("show");
 }
-function inspectDiary() {
-  if (state.stage === "intro" && openingIndex === 0) {
-    if (!parcelOpened) { openParcel(); return; }
-    openingIndex = 1;
-    intro();
-  }
-  if (state.scene !== "bar") journal();
-  openJournal();
-}
-function inspectManuscript() {
-  if (state.scene === "bar") return;
-  draft();
-  openJournal();
-}
-function nextOpening() {
-  finishLine();
-  if (openingIndex === 0) {
-    if (!parcelOpened) openParcel();
-    else inspectDiary();
-  } else if (openingIndex < opening.length - 1) {
-    closeJournal();
-    openingIndex++;
-    intro();
-  } else {
-    state.stage = "idle";
-    beginInterview();
-    sfx("glass");
-  }
-}
-function heading(scene) {
-  document.body.dataset.scene = scene;
-  document.body.dataset.stage = state.stage;
-  const parcel = state.stage === "intro" && openingIndex < 2;
-  document.body.dataset.view = parcel ? (parcelOpened ? "parcel-open" : "parcel-closed") : scene;
-  $("journal-toggle-label").textContent = parcel && !parcelOpened ? "Parcel" : "Journal";
-  document.body.classList.toggle("opening", state.stage === "intro");
-  $("world").setAttribute(
-    "aria-label",
-    scene === "bar"
-      ? "Pixel art of a shadowed stranger at a dim bar table"
-      : "Pixel art of a lamp, manuscript and typewriter at your home desk",
-  );
-}
+
+// ——— Journal pages ———
+const letterHTML =
+  '<div class="journal-top"><span>THREE NIGHTS AGO</span><span>NO RETURN ADDRESS</span></div><h2>An invitation.</h2><p class="draft-line letter">You write lives for a living.<br><br>I am having trouble remembering mine.<br><br>The Last Light. Thursday. Before midnight.<br><br>Bring the pages. Come alone.</p>';
 function journal() {
   const j = $("journal");
+  const presenting = state.scene === "bar" && state.stage === "claim" && questions[state.current]?.scrap !== null;
   j.innerHTML =
-    '<div class="journal-top"><span>EXHIBIT 01</span><span>' + iconHTML("pin", "ink") + 'FOUND, NOT GIVEN</span></div><h2>A borrowed memory.</h2><p class="intro">Three lines from a water-damaged journal. The handwriting feels almost familiar.</p>';
+    (state.scene === "bar" ? "" : letterHTML) +
+    '<div class="journal-top"><span>EXHIBIT 01</span><span>FOUND, NOT GIVEN</span></div><h2>A borrowed memory.</h2><p class="intro">Three lines from a water-damaged journal. The handwriting feels almost familiar.</p>';
   scraps.forEach((scrap, i) => {
-    const pinned = state.decisions.some(
-      (d) => d.action === "pin" && questions[d.question].scrap === i,
-    );
-    const b = btn(
-      "",
-      () => {
-        finishLine();
-        state.held = state.held === i ? null : i;
-        notice();
-        renderBar();
-        closeJournal();
-        showDialogue();
-        if (state.stage === "claim" && state.held !== null) $("continue-cue").textContent = "Click this line to pin the contradiction";
-        $("spoken").focus({ preventScroll: true });
-        if (state.held !== null) {
-          notice(
-            state.stage === "claim"
-              ? "Scrap held. Click his last line or “Pin contradiction”."
-              : "Scrap held. Listen for a line that clashes.",
-          );
-
-        }
-      },
-      "scrap" + (state.held === i ? " selected" : ""),
-    );
-    b.setAttribute("aria-pressed", String(state.held === i));
-    b.disabled = state.scene !== "bar" || state.stage === "intro" || state.round === "introductions";
-    b.innerHTML = `<img class="evidence-art" src="./assets/evidence-${["fire", "key", "river"][i]}.png" alt="" width="24" height="24"><small>${String(i + 1).padStart(2, "0")} / ${scrap.date}</small><p>${scrap.text}</p><span class="scrap-state">${b.disabled ? (state.scene !== "bar" ? "FROM THE JOURNAL" : "FOR WHEN YOU REACH THE PAGES") : state.held === i ? iconHTML("diamond", "ember") + "HELD. CLICK AGAIN TO RELEASE" : pinned ? iconHTML("pin", "ink") + "PINNED IN YOUR NOTES" : iconHTML("arrow", "ink") + "HOLD THIS SCRAP"}</span>`;
+    const pinned = state.decisions.some((d) => d.action === "pin" && questions[d.question].scrap === i);
+    const b = document.createElement("button");
+    b.className = "scrap";
+    b.disabled = !presenting;
+    b.innerHTML = `<img class="evidence-art" src="./assets/evidence-${["fire", "key", "river"][i]}.png" alt="" width="24" height="24"><small>${String(i + 1).padStart(2, "0")} / ${scrap.date}</small><p>${scrap.text}</p><span class="scrap-state">${presenting ? "SHOW HIM THIS PAGE" : pinned ? "PINNED IN YOUR NOTES" : state.scene === "bar" ? "WAIT FOR A LINE THAT CLASHES" : "FROM THE JOURNAL"}</span>`;
+    b.onclick = () => present(i);
     j.append(b);
   });
-  const hint = document.createElement("p");
-  hint.className = "journal-tip";
-  hint.textContent =
-    state.round === "introductions"
-      ? "The pages can wait a moment. There’s a person across the table."
-      : "Hold a scrap. Click a line that clashes. Or let the silence have it.";
-  j.append(hint);
   const notes = document.createElement("div");
   notes.className = "notes";
   notes.innerHTML = "<strong>YOUR MARGIN NOTES</strong>";
   if (!state.decisions.length) notes.innerHTML += "<p>No judgments. Yet.</p>";
-  state.decisions.forEach((d) => {
-    const p = document.createElement("p");
-    p.append(icon(d.action === "pin" ? "pin" : d.action === "believe" ? "check" : "close", "ink"), `${questions[d.question].topic.toLowerCase()}: ${d.action === "pin" ? "contradiction pinned" : d.action === "believe" ? "account believed" : "left unresolved"}`);
-    notes.append(p);
-  });
+  for (const d of state.decisions)
+    notes.innerHTML += `<p>${questions[d.question].topic.toLowerCase()}: ${d.action === "pin" ? "contradiction pinned" : d.action === "believe" ? "account believed" : "left unresolved"}</p>`;
   j.append(notes);
-}
-function renderBar() {
-  heading("bar");
-  journal();
-  if (state.round === "introductions") {
-    renderIntroductions();
-    return;
-  }
-  const q = state.current === null ? null : questions[state.current];
-  $("speaker").textContent = "THE STRANGER";
-  $("line-count").textContent = q ? q.topic : "OFF THE RECORD";
-  $("spoken").classList.toggle(
-    "pinnable",
-    state.stage === "claim" && state.held !== null,
-  );
-  if (state.stage === "answer") actions([[label("Keep listening", "arrow"), showClaim]]);
-  else if (state.stage === "claim")
-    actions([
-      [label("Pin contradiction", "pin", { before: true, tone: "ember" }), () => decide("pin"), "pin"],
-      [label("Read the journal", "book", { before: true }), openJournal],
-      ["Believe him", () => decide("believe")],
-      ["Let it slide", () => decide("slide")],
-    ]);
-  else if (state.stage === "reaction")
-    actions([[label("Back to your questions", "arrow"), finishQuestion]]);
-  else actions([]);
-  const area = $("interaction");
-  area.innerHTML = `<div class="section-label"><span>YOUR QUESTIONS</span><span>${state.asked.length} / 4 ASKED</span></div>`;
-  questions.forEach((question, i) => {
-    const done = state.asked.includes(i);
-    const b = btn("", () => ask(i), "question" + (done ? " done" : ""));
-    b.innerHTML = `<span class="number">${String(i + 1).padStart(2, "0")}</span><span>${question.short}</span>`;
-    b.disabled = done || ["answer", "claim", "reaction"].includes(state.stage);
-    area.append(b);
-  });
-  const row = document.createElement("div");
-  row.className = "leave-row";
-  row.innerHTML = "<p>You don’t have to ask everything.</p>";
-  row.append(btn(label("Leave & write", "pen"), goDesk, "primary"));
-  area.append(row);
-}
-function renderIntroductions() {
-  $("speaker").textContent = "THE STRANGER";
-  $("line-count").textContent = "OFF THE RECORD";
-  $("spoken").classList.remove("pinnable");
-  if (state.stage === "introduction-answer") {
-    actions([
-      [introductions[state.currentIntroduction].followUp, followUpIntroduction],
-    ]);
-  } else if (state.stage === "introduction-reply") {
-    actions([[label("Ask something else", "arrow"), finishIntroduction]]);
-  } else actions([]);
-  const area = $("interaction");
-  area.innerHTML =
-    '<div class="section-label"><span>BEFORE THE PAGES</span><span>TAKE YOUR TIME</span></div>';
-  introductions.forEach((question, i) => {
-    const done = state.introductionsAsked.includes(i);
-    const b = btn(
-      "",
-      () => askIntroduction(i),
-      "question" + (done ? " done" : ""),
-    );
-    b.innerHTML = `<span class="number">${String(i + 1).padStart(2, "0")}</span><span>${question.short}</span>`;
-    b.disabled = done || state.stage !== "idle";
-    area.append(b);
-  });
-  const row = document.createElement("div");
-  row.className = "leave-row";
-  row.append(
-    btn(label("Leave & write", "pen"), goDesk),
-    btn(label("About the journal", "book"), beginJournalQuestions, "primary"),
-  );
-  area.append(row);
 }
 function draft() {
   const j = $("journal");
-  j.innerHTML =
-    '<div class="journal-top"><span>MANUSCRIPT</span><span>CHAPTER 01</span></div><h2>What remains.</h2><p class="intro">A version of a life. In your words.</p>';
-  state.picks.forEach((p) => {
-    const el = document.createElement("p");
-    el.className = "draft-line";
-    el.textContent = p.text;
-    j.append(el);
-  });
-  if (state.picks.length < 3) {
-    const p = document.createElement("p");
-    p.className = "empty-draft";
-    p.textContent = state.picks.length
-      ? "The next line is still yours."
-      : "The page waits for someone to decide what happened.";
-    j.append(p);
-  }
-  const notes = document.createElement("div");
-  notes.className = "notes";
-  notes.innerHTML = "<strong>FROM THE INTERVIEW</strong>";
-  for (const d of state.decisions) {
-    const p = document.createElement("p");
-    p.append(icon(d.action === "pin" ? "pin" : d.action === "believe" ? "check" : "close", "ink"), `${questions[d.question].topic.toLowerCase()}: ${d.action === "pin" ? "contradiction pinned" : d.action === "believe" ? "believed" : "unresolved"}`);
-    notes.append(p);
-  }
-  if (!state.decisions.length)
-    notes.innerHTML += "<p>You brought only his silence home.</p>";
-  j.append(notes);
+  j.innerHTML = '<div class="journal-top"><span>MANUSCRIPT</span><span>CHAPTER 01</span></div><h2>What remains.</h2><p class="intro">A version of a life. In your words.</p>';
+  for (const p of state.picks) j.innerHTML += `<p class="draft-line">${escape(p.text)}</p>`;
+  if (state.picks.length < beats.length) j.innerHTML += `<p class="empty-draft">${state.picks.length ? "The next line is still yours." : "The page waits for someone to decide what happened."}</p>`;
 }
-function renderDesk() {
-  heading("desk");
-  draft();
-  $("speaker").textContent = "THE WRITER";
-  $("line-count").textContent = "DRAFT / " + (state.picks.length + 1);
-  say(
-    state.picks.length === 0
-      ? "“Leave a little room,” he said. You had written those words in the margin before leaving home. You turn to a clean page."
-      : state.picks.length === 1
-        ? "The first line makes the next one easier. That is what frightens you."
-        : "He gave you fragments. You are giving them a shape. One more sentence, and it becomes a life.",
-  );
-  actions([]);
-  const beat = beats[state.picks.length];
-  const area = $("interaction");
-  area.innerHTML = `<div class="section-label"><span>WRITE TONIGHT’S CHAPTER</span><span>BEAT ${state.picks.length + 1} / 3</span></div><h2 class="beat-title">${beat.title}</h2><p class="beat-prompt">${beat.prompt}</p>`;
-  beat.options.forEach((p, i) => {
-    const b = btn(
-      "",
-      () => {
-        finishLine();
-        if (pickBeat(state, i)) {
-          sfx("tick");
-          state.scene === "end" ? renderEnd() : renderDesk();
-        }
-      },
-      "choice",
+function openJournal(kind = "journal") {
+  kind === "manuscript" ? draft() : journal();
+  if (!$("journal-dialog").open) $("journal-dialog").showModal();
+}
+function closeJournal() {
+  if ($("journal-dialog").open) $("journal-dialog").close();
+}
+function inspectJournal() {
+  if (!parcelOpened) return openParcel();
+  if (openingIndex === 0) return readDiary();
+  openJournal();
+}
+
+// ——— Three nights ago ———
+function start() {
+  place("YOUR STUDY — THREE NIGHTS AGO");
+  world.cut("desk-parcel");
+  play([title(opening[0].title), narr(opening[0].text), ...aside("opening-0")], [{ text: "(Untie the parcel.)", fn: openParcel }]);
+}
+function openParcel() {
+  if (parcelOpened) return;
+  parcelOpened = true;
+  hideChoices();
+  world.parcel(true);
+  sfx("spark");
+  setTimeout(() => sfx("glass"), reduce ? 0 : 900);
+  // Let the lid come off before anyone speaks.
+  const g = ++generation;
+  setTimeout(() => {
+    if (g !== generation) return;
+    play(
+      [narr("The string gives. Under the lid: a battered diary and a letter. No signature. The paper smells faintly of river water."), ...aside("parcel")],
+      [{ text: "(Read the letter and the diary.)", fn: readDiary }],
     );
-    b.textContent = p.text;
-    area.append(b);
-  });
+  }, reduce ? 0 : 2300);
 }
-function renderEnd() {
-  heading("end");
-  draft();
-  const tone = dominant(state),
-    end = endings[tone];
-  $("speaker").textContent = "CHAPTER LOCKED";
-  $("line-count").textContent = "ONE NIGHT. ONE VERSION.";
-  say(
-    "Somewhere downstairs, a glass touches a table. You put a full stop where a man used to be.",
-  );
-  actions([]);
-  const area = $("interaction");
-  area.innerHTML = `<article class="end-card"><div class="chip">${tone.toUpperCase()}</div><span class="eyebrow">THE VERSION YOU WROTE</span><h2>${end.title}</h2><p>${end.text}</p><p class="stat">${end.percent}% of players chose ${tone}.</p><small>Illustrative POC statistic. No player data collected.</small><div id="end-actions"></div></article><details class="feedback"><summary>${iconHTML("arrow", "dim")}Finished? Four questions for the friend test</summary><ol><li>Could you tell what you were supposed to do?</li><li>Did pinning feel satisfying or fussy?</li><li>Did writing feel like your choice mattered?</li><li>Would you sit down for a second night?</li></ol><p class="beat-prompt">Your run: ${Math.max(1, Math.round((Date.now() - state.started) / 60000))} minutes. Share your answers with whoever sent you this.</p></details>`;
-  const recap = document.createElement("div");
-  recap.className = "ending-manuscript";
-  state.picks.forEach((pick) => {
-    const line = document.createElement("p");
-    line.textContent = pick.text;
-    recap.append(line);
-  });
-  area.querySelector(".end-card .stat").before(recap);
-  $("end-actions").append(
-    btn(
-      label("Write another version", "replay"),
-      () => {
-        state = freshState();
-        openingIndex = 0;
-        parcelOpened = false;
-        closeJournal();
-        intro();
-        window.scrollTo({ top: 0, behavior: reduce ? "instant" : "smooth" });
-      },
-      "primary",
-    ),
-  );
+function readDiary() {
+  if (openingIndex > 0) return openJournal();
+  openingIndex = 1;
+  openJournal();
+  play([title(opening[1].title), narr(opening[1].text), ...aside("opening-1")], [{ text: `(${opening[1].next}.)`, fn: toBar }]);
 }
-function intro() {
-  heading("bar");
-  const page = opening[openingIndex];
-  $("speaker").textContent = page.title.toUpperCase();
-  $("line-count").textContent = `${openingIndex + 1} / ${opening.length}`;
-  $("world").setAttribute(
-    "aria-label",
-    openingIndex < 2
-      ? (parcelOpened ? "An opened parcel with a leather journal and a folded letter" : "A paper-wrapped parcel tied with string on a dark wooden table")
-      : "A stranger slowly becomes visible in the shadows at the bar table",
-  );
-  say(openingIndex === 0 && parcelOpened ? "Under the string: a battered diary and a letter. No signature. You lift the cover; the paper smells faintly of river water. Click the diary to read what survived." : page.text);
-  actions([]);
-  journal();
-  if (openingIndex === 0) {
-    $("journal").innerHTML =
-      '<div class="journal-top"><span>THREE NIGHTS AGO</span><span>NO RETURN ADDRESS</span></div><h2>An invitation.</h2><p class="draft-line">You write lives for a living.<br><br>I am having trouble remembering mine.<br><br>The Last Light. Thursday. Before midnight.<br><br>Bring the pages. Come alone.</p><p class="intro">No signature. Just a journal, wrapped in the letter.</p>';
-  }
-  $("interaction").replaceChildren(
-    btn(label(openingIndex === 0 ? (parcelOpened ? "Read the diary" : "Untie the parcel") : page.next, "arrow"),
-      nextOpening, "primary opening-next"),
-  );
+function toBar() {
+  closeJournal();
+  openingIndex = 2;
+  place("THE LAST LIGHT — 23:40");
+  world.cut("bar", () => world.strangerArrives());
+  play([title(opening[2].title), narr(opening[2].text), ...aside("opening-2")], [{ text: `(${opening[2].next}.)`, fn: beginInterview }]);
+}
+
+// ——— The interview ———
+const leaveChoice = () => ({ text: "(Stand up. Go home and write.)", fn: leave, cls: "leave" });
+function deedChoice(id, back) {
+  return { text: deeds[id].label, done: state.deeds.includes(id), fn: () => doDeed(id, back) };
+}
+function doDeed(id, back) {
+  if (!markDeed(state, id)) return;
+  world.hunger(state.hunger);
+  play(deeds[id].entries, back);
 }
 function beginInterview() {
-  renderBar();
-  say(
-    "“You’re late. Or I’m early. After a while, the years stop keeping their side of the bargain.” He nudges a glass toward you. “You brought your questions?”",
-  );
+  state.stage = "idle";
+  world.shot("table");
+  sfx("glass");
+  play([line("“You’re late. Or I’m early. After a while, the years stop keeping their side of the bargain.” He nudges a glass toward you. “You brought your questions?”"), ...aside("interview")], introHub);
 }
-$("spoken").onclick = () => {
-  if (typing) {
-    finishLine();
-    return;
+function introHub() {
+  return [
+    ...introductions.map((q, i) => ({ text: q.short, done: state.introductionsAsked.includes(i), fn: () => askIntroduction(i) })),
+    { text: "About the journal.", fn: beginJournalQuestions },
+    leaveChoice(),
+  ];
+}
+function askIntroduction(i) {
+  const q = introductions[i];
+  state.currentIntroduction = i;
+  state.introductionsAsked.push(i);
+  state.stage = "introduction-answer";
+  const choices = () => [{ text: q.followUp, fn: () => followUp(i) }, i === 2 && deedChoice("pocket", choices)];
+  play([you(q.short), line(q.answer), ...aside(`intro-${i}-answer`)], choices);
+}
+function followUp(i) {
+  state.stage = "idle";
+  state.currentIntroduction = null;
+  play([you(introductions[i].followUp), line(introductions[i].reply), ...aside(`intro-${i}-reply`), narr("He rests his cigarette on the edge of the ashtray and waits for your next question.")], introHub);
+}
+function beginJournalQuestions() {
+  state.round = "journal";
+  state.stage = "idle";
+  play([narr("You turn the copied pages toward him."), line("“All right. What does she say I did?”"), ...aside("journal-round")], journalHub);
+}
+function journalHub() {
+  state.stage = "idle";
+  state.current = null;
+  return [
+    ...questions.map((q, i) => ({ text: q.short, done: state.asked.includes(i), fn: () => ask(i) })),
+    deedChoice("mirror", journalHub),
+    deedChoice("barkeep", journalHub),
+    leaveChoice(),
+  ];
+}
+function ask(i) {
+  const q = questions[i];
+  state.current = i;
+  state.asked.push(i);
+  state.stage = "answer";
+  sfx("glass");
+  const choices = () => [{ text: "(Keep listening.)", fn: showClaim }, i === 2 && deedChoice("pulse", choices)];
+  play([you(q.short), line(q.answer), ...aside(`q-${i}-answer`)], choices);
+}
+function showClaim() {
+  state.stage = "claim";
+  play([line(questions[state.current].claim), ...aside(`q-${state.current}-claim`)], claimChoices);
+}
+function claimChoices() {
+  return [
+    questions[state.current].scrap !== null && { text: "(Show him a page from the journal.)", fn: () => openJournal(), keep: true },
+    { text: "I believe you.", fn: () => decide("believe") },
+    { text: "(Let it slide.)", fn: () => decide("slide") },
+    leaveChoice(),
+  ];
+}
+const quarterTurn = () => narr("He turns his glass a quarter turn. The rain fills the silence between you.");
+function present(i) {
+  closeJournal();
+  const q = questions[state.current];
+  state.held = i;
+  const shown = narr(`You slide a page across the table. “${scraps[i].text}”`);
+  if (judge(state, "pin")) {
+    sfx("pin");
+    world.hunger(state.hunger);
+    play([shown, line(q.pinned), ...aside(`q-${state.current}-pinned`), quarterTurn()], journalHub);
+  } else {
+    state.held = null;
+    play([shown, ...aside("wrong-page")], claimChoices);
   }
-  if (state.stage === "claim" && state.scene === "bar" && state.held !== null) {
-    decide("pin");
-    return;
+}
+function decide(action) {
+  const q = questions[state.current];
+  const said = action === "believe" ? you("I believe you.") : null;
+  judge(state, action);
+  world.hunger(state.hunger);
+  const key = action === "believe" ? "believed" : "slid";
+  play([said, line(q[key]), ...aside(`q-${state.current}-${key}`), quarterTurn()], journalHub);
+}
+
+// ——— Closing time ———
+function leave() {
+  closeJournal();
+  leaveBar(state);
+  place("THE LAST LIGHT — CLOSING");
+  world.reveal();
+  play(nightfall.reveal, nightChoices);
+}
+function nightChoices() {
+  return [
+    { text: nightfall.leave.label, fn: () => night("spared", nightfall.leave.entries) },
+    { text: nightfall.compel.label, fn: () => night("compelled", [you("You served one man tonight. You’ll forget his face by morning."), ...nightfall.compel.entries]) },
+    { text: nightfall.feed.label, fn: () => night("fed", nightfall.fed), cls: "hunger" },
+  ];
+}
+function night(fate, entries) {
+  resolveNightfall(state, fate);
+  world.nightfall(fate);
+  world.hunger(state.hunger);
+  if (fate === "fed") {
+    ambience(true, { night: true });
+    sfx("heartbeat");
   }
-  showResponses();
-};
-$("review-line").onclick = () => {
-  showDialogue();
-  $("spoken").focus({ preventScroll: true });
-};
-function unlockAudio() {
-  if (audioUnlocked) return;
-  audioUnlocked = true;
+  play(entries, goHomeChoice);
+}
+function goHomeChoice() {
+  return [{ text: "(Go home. Write it down while you still know what it means.)", fn: goHome }];
+}
+function goHome() {
+  place("YOUR STUDY — 03:12");
+  world.cut("desk", () => {
+    world.resetNight();
+    world.writerAtDesk(true);
+    ambience(true, { night: false });
+  });
   sfx("lighter");
+  renderDesk();
 }
-document.addEventListener("pointerdown", unlockAudio, { capture: true });
-document.addEventListener("keydown", unlockAudio, { capture: true });
-$("parcel-hotspot").onclick = openParcel;
-$("diary-hotspot").onclick = inspectDiary;
-$("manuscript-hotspot").onclick = inspectManuscript;
-$("journal-toggle").onclick = inspectDiary;
-$("journal-close").onclick = closeJournal;
-$("journal-dialog").addEventListener("click", (event) => {
-  if (event.target === $("journal-dialog")) {
-    const r = event.target.getBoundingClientRect();
-    if (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom) closeJournal();
-  }
+
+// ——— The desk ———
+const deskLines = [
+  "He was almost kind to you tonight. The journal says he was something else. You turn to a clean page.",
+  "The first line makes the next one easier. That is what frightens you.",
+  "He gave you fragments. You are giving them a shape. One more sentence, and it becomes a life.",
+];
+function renderDesk() {
+  const n = state.picks.length;
+  const beat = beats[n];
+  play([title(beat.title), narr(deskLines[n]), narr(beat.prompt)], () => beat.options.map((o, i) => ({ text: o.text, fn: () => pick(i) })));
+}
+function pick(i) {
+  if (!pickBeat(state, i)) return;
+  const p = state.picks.at(-1);
+  world.hunger(state.hunger);
+  play([{ kind: "typed", text: p.text }, ...aside(`pick-${p.tone}`)], () => (state.scene === "end" ? renderEnd() : renderDesk()));
+}
+function renderEnd() {
+  world.shot("shelf");
+  play([narr("Somewhere downstairs, a glass touches a table. You put a full stop where a man used to be."), narr(epilogues[state.barkeep ?? "spared"]), narr(shelf)], () => {
+    showEnd();
+    return [{ text: "Write another version.", fn: restart }];
+  });
+}
+function showEnd() {
+  const tone = dominant(state), end = endings[tone];
+  const minutes = Math.max(1, Math.round((Date.now() - state.started) / 60000));
+  const el = $("end");
+  el.className = `end-card ${tone}`;
+  el.innerHTML = `<div class="chip">${end.label}</div><span class="eyebrow">THE VERSION YOU WROTE</span><h2>${end.title}</h2><p>${end.text}</p><div class="ending-manuscript">${state.picks.map((p) => `<p>${escape(p.text)}</p>`).join("")}</div><p class="stat">The barkeep: ${state.barkeep}. ${minutes} minute${minutes === 1 ? "" : "s"}.</p>`;
+  el.hidden = false;
+  $("subtitle").replaceChildren();
+}
+function restart() {
+  state = freshState();
+  openingIndex = 0;
+  parcelOpened = false;
+  $("end").hidden = true;
+  $("history").replaceChildren();
+  closeJournal();
+  world.resetNight();
+  world.writerAtDesk(false);
+  world.parcel(false);
+  world.hunger(0);
+  start();
+}
+
+// ——— Wiring ———
+const world = startWorld($("world"), {
+  reduced: reduce,
+  hotspotLabel(name) {
+    if (name === "parcel") return parcelOpened ? null : "Untie the parcel";
+    if (name === "journal") return parcelOpened && (state.scene === "bar" || openingIndex < 2) ? "Read the journal [J]" : null;
+    if (name === "manuscript") return state.scene === "desk" || state.scene === "end" ? "Read your manuscript [M]" : null;
+    if (name === "lamp") return state.scene === "bar" ? "The lamp" : null;
+    return null;
+  },
+  onPick(name) {
+    if (name === "parcel") openParcel();
+    else if (name === "journal") inspectJournal();
+    else if (name === "manuscript") openJournal("manuscript");
+    else if (name === "lamp") sfx("spark");
+  },
+  onHover(label, x, y) {
+    const tip = $("tooltip");
+    tip.hidden = !label;
+    if (label) {
+      tip.textContent = label;
+      tip.style.transform = `translate(${x + 14}px, ${y + 14}px)`;
+    }
+  },
 });
+// Clicking the room or the subtitle moves the scene on, unless it lands on something you can pick up.
+for (const el of [$("world"), $("subtitle")])
+  el.addEventListener("click", () => {
+    if ($("tooltip").hidden) advance();
+  });
+$("journal-toggle").onclick = inspectJournal;
+$("journal-close").onclick = closeJournal;
+$("history-toggle").onclick = () => $("history-dialog").showModal();
+$("history-close").onclick = () => $("history-dialog").close();
+for (const id of ["journal-dialog", "history-dialog"])
+  $(id).addEventListener("click", (event) => {
+    if (event.target !== $(id)) return;
+    const r = event.target.getBoundingClientRect();
+    if (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom) $(id).close();
+  });
 $("fullscreen-toggle").onclick = async () => {
   try {
     if (document.fullscreenElement) await document.exitFullscreen();
     else await document.documentElement.requestFullscreen();
-  } catch { notice("Fullscreen isn’t available in this browser. The scene still fills the window."); }
+  } catch {
+    $("notice").textContent = "Fullscreen isn’t available in this browser.";
+  }
 };
-document.addEventListener("fullscreenchange", () => {
-  $("fullscreen-toggle").setAttribute("aria-label", document.fullscreenElement ? "Exit fullscreen" : "Enter fullscreen");
-});
+document.addEventListener("pointerdown", unlock, { capture: true });
+document.addEventListener("keydown", unlock, { capture: true });
 document.addEventListener("keydown", (e) => {
-  if (e.code === "Space" && !e.repeat && !$("journal-dialog").open && document.body.dataset.presentation === "dialogue" && !e.target.closest("button")) {
-    e.preventDefault(); $("spoken").click(); return;
-  }
-  if (e.key.toLowerCase() === "m" && !e.ctrlKey && !e.metaKey && !e.altKey && state.scene !== "bar") {
-    e.preventDefault(); inspectManuscript(); return;
-  }
-  if (e.key.toLowerCase() === "j" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const dialogOpen = $("journal-dialog").open || $("history-dialog").open;
+  if ((e.code === "Space" || e.key === "Enter") && !dialogOpen && !e.target.closest("button")) {
     e.preventDefault();
-    if ($("journal-dialog").open) closeJournal(); else inspectDiary();
+    advance();
     return;
   }
-  if (e.key === "Escape") {
-    if ($("journal-dialog").open) { e.preventDefault(); closeJournal(); return; }
-    finishLine();
-    if (state.scene === "bar" && state.stage !== "intro") {
-      state.held = null;
-      renderBar();
-      notice();
+  if (/^[1-9]$/.test(e.key) && !dialogOpen) {
+    const b = $("choices").querySelectorAll("button")[Number(e.key) - 1];
+    if (b && !b.disabled) {
+      e.preventDefault();
+      b.click();
     }
+    return;
+  }
+  const key = e.key.toLowerCase();
+  if (key === "j" && !$("history-dialog").open) {
+    e.preventDefault();
+    $("journal-dialog").open ? closeJournal() : inspectJournal();
+  } else if (key === "m" && !$("history-dialog").open && (state.scene === "desk" || state.scene === "end")) {
+    e.preventDefault();
+    $("journal-dialog").open ? closeJournal() : openJournal("manuscript");
+  } else if (key === "h" && !$("journal-dialog").open) {
+    e.preventDefault();
+    $("history-dialog").open ? $("history-dialog").close() : $("history-dialog").showModal();
   }
 });
-const scenery = startScenery(
-  $("world"),
-  () => state.stage === "intro" && openingIndex < 2 ? (parcelOpened ? "parcel-open" : "parcel-closed") : state.scene,
-  () => (state.stage === "intro" && openingIndex < 2 ? 0 : 1),
-);
-$("lamp-secret").onclick = () => {
-  if (scenery.tapLamp()) sfx("spark");
-};
-intro();
+start();

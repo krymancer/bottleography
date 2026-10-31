@@ -33,14 +33,11 @@ test("river contradiction supports Hero; memory question cannot be pinned", () =
   assert.equal(judge(s, "pin"), false);
   assert.ok(judge(s, "slide"));
 });
-test("all endings reachable even against four interview judgments", () => {
-  for (const tone of ["Hero", "Monster", "Nobody"]) {
+test("both portrayals reachable even against three interview judgments", () => {
+  for (const [tone, against] of [["Hero", "pin"], ["Monster", "believe"]]) {
     const s = freshState();
     s.scene = "desk";
-    s.decisions = [0, 1, 2, 3].map((question) => ({
-      question,
-      action: "believe",
-    }));
+    s.decisions = [0, 1, 3].map((question) => ({ question, action: against }));
     for (const beat of beats)
       assert.ok(
         pickBeat(
@@ -53,25 +50,28 @@ test("all endings reachable even against four interview judgments", () => {
     assert.equal(pickBeat(s, 0), false);
   }
 });
-test("all 27 chapter paths finish with skipped interview", () => {
-  for (let a = 0; a < 3; a++)
-    for (let b = 0; b < 3; b++)
-      for (let c = 0; c < 3; c++) {
+test("all 8 chapter paths finish with skipped interview", () => {
+  for (let a = 0; a < 2; a++)
+    for (let b = 0; b < 2; b++)
+      for (let c = 0; c < 2; c++) {
         const s = freshState();
         s.scene = "desk";
         [a, b, c].forEach((i) => assert.ok(pickBeat(s, i)));
         assert.equal(s.scene, "end");
-        assert.ok(["Hero", "Monster", "Nobody"].includes(dominant(s)));
+        assert.ok(["Hero", "Monster"].includes(dominant(s)));
       }
 });
-test("tied chapter tones follow latest chosen tone", () => {
+test("letting a claim slide takes no side; a tie follows the last line written", () => {
   const s = freshState();
+  s.current = 3;
+  s.stage = "claim";
+  judge(s, "slide");
+  assert.deepEqual(score(s), { Hero: 0, Monster: 0 });
   s.scene = "desk";
-  for (const [i, tone] of ["Hero", "Monster", "Nobody"].entries())
-    pickBeat(
-      s,
-      beats[i].options.findIndex((p) => p.tone === tone),
-    );
-  assert.deepEqual(score(s), { Hero: 2, Monster: 2, Nobody: 2 });
-  assert.equal(dominant(s), "Nobody");
+  s.decisions.push({ question: 0, action: "pin" }, { question: 1, action: "pin" });
+  pickBeat(s, beats[0].options.findIndex((p) => p.tone === "Monster"));
+  pickBeat(s, beats[1].options.findIndex((p) => p.tone === "Hero"));
+  pickBeat(s, beats[2].options.findIndex((p) => p.tone === "Hero"));
+  assert.deepEqual(score(s), { Hero: 4, Monster: 4 });
+  assert.equal(dominant(s), "Hero");
 });

@@ -117,10 +117,11 @@ export const questions = [
     slid: "Just don’t mistake an empty space for an innocent one. I’ve done that often enough for both of us.",
   },
 ];
+// Three sentences decide which man reaches the page: the one you sat with, or the one in the stories.
 export const beats = [
   {
     title: "Begin with the fire.",
-    prompt: "Every story needs a first sentence. Give him one.",
+    prompt: "Every life needs a first sentence. The man across the table, or the man in the journal?",
     options: [
       {
         tone: "Hero",
@@ -130,10 +131,6 @@ export const beats = [
         tone: "Monster",
         text: "He brought a lamp to Bellwether, and called the ashes necessary.",
       },
-      {
-        tone: "Nobody",
-        text: "That winter, Bellwether burned. A man happened to be there.",
-      },
     ],
   },
   {
@@ -141,16 +138,12 @@ export const beats = [
     prompt: "Six people behind a door. One account to leave behind.",
     options: [
       {
-        tone: "Nobody",
-        text: "The key passed between hands. The names behind the door did not survive.",
+        tone: "Monster",
+        text: "He held six lives in his palm, and kept his hand closed.",
       },
       {
         tone: "Hero",
         text: "He failed to open the chapel, and carried that failure longer than any man should.",
-      },
-      {
-        tone: "Monster",
-        text: "He held six lives in his palm, and kept his hand closed.",
       },
     ],
   },
@@ -159,35 +152,26 @@ export const beats = [
     prompt: "The last line is the one your reader carries home.",
     options: [
       {
-        tone: "Monster",
-        text: "One child could not wash a village from his hands.",
-      },
-      {
-        tone: "Nobody",
-        text: "By morning, the river had forgotten him. In time, he would do the same.",
-      },
-      {
         tone: "Hero",
         text: "Even after everything, his hands remembered how to save someone.",
+      },
+      {
+        tone: "Monster",
+        text: "One child could not wash a village from his hands.",
       },
     ],
   },
 ];
 export const endings = {
   Hero: {
+    label: "A GOOD MAN",
     title: "A good man, in the end.",
-    text: "You gave him something he could not give himself: a reason to keep going. The dead do not get to approve the manuscript.",
-    percent: 35,
+    text: "You sat with him. You heard it in his own voice, and you wrote the man you met: tired, sorry, almost gentle. The journal says otherwise. The dead don’t get to approve the manuscript.",
   },
   Monster: {
+    label: "A PSYCHO",
     title: "Some fires have a name.",
-    text: "You put the lamp back in his hand. Whatever he has forgotten, the page will remember. Whether that is justice is another story.",
-    percent: 42,
-  },
-  Nobody: {
-    title: "The space a man leaves.",
-    text: "You left him between the lines. No monument. No sentence passed. A life can disappear without ever coming to an end.",
-    percent: 23,
+    text: "You kept to the stories. A lamp, a key, a closed hand. You wrote him the way Bellwether would have: a madman who smiled at the word counting. Whatever he has forgotten, the page will remember.",
   },
 };
 export function freshState() {
@@ -203,31 +187,29 @@ export function freshState() {
     stage: "intro",
     picks: [],
     started: Date.now(),
+    hunger: 0,
+    deeds: [],
+    barkeep: null,
   };
 }
+// Leaving a claim unresolved takes no side.
 export function judgmentTone(index, action) {
-  return action === "pin"
-    ? index === 2
-      ? "Hero"
-      : "Monster"
-    : action === "believe"
-      ? "Hero"
-      : "Nobody";
+  if (action === "pin") return index === 2 ? "Hero" : "Monster";
+  return action === "believe" ? "Hero" : null;
 }
 export function score(state) {
-  const totals = { Hero: 0, Monster: 0, Nobody: 0 };
-  for (const d of state.decisions) totals[judgmentTone(d.question, d.action)]++;
+  const totals = { Hero: 0, Monster: 0 };
+  for (const d of state.decisions) {
+    const tone = judgmentTone(d.question, d.action);
+    if (tone) totals[tone]++;
+  }
   for (const p of state.picks) totals[p.tone] += 2;
   return totals;
 }
 export function dominant(state) {
-  const totals = score(state);
-  const max = Math.max(...Object.values(totals));
-  const ties = Object.keys(totals).filter((t) => totals[t] === max);
-  return (
-    [...state.picks].reverse().find((p) => ties.includes(p.tone))?.tone ??
-    (ties.includes("Nobody") ? "Nobody" : ties[0])
-  );
+  const { Hero, Monster } = score(state);
+  if (Hero !== Monster) return Hero > Monster ? "Hero" : "Monster";
+  return state.picks.at(-1)?.tone ?? "Hero";
 }
 export function judge(state, action) {
   if (
@@ -241,6 +223,7 @@ export function judge(state, action) {
     return false;
   if (!["pin", "believe", "slide"].includes(action)) return false;
   state.decisions.push({ question: state.current, action });
+  if (judgmentTone(state.current, action) === "Monster") state.hunger++;
   state.stage = "reaction";
   state.held = null;
   return true;
@@ -250,6 +233,42 @@ export function pickBeat(state, index) {
   const option = beats[state.picks.length]?.options[index];
   if (!option) return false;
   state.picks.push({ ...option });
+  if (option.tone === "Monster") state.hunger++;
   if (state.picks.length === beats.length) state.scene = "end";
   return true;
 }
+// Things you do instead of asking. Each happens once.
+export function doDeed(state, id) {
+  if (state.scene !== "bar" || state.deeds.includes(id)) return false;
+  state.deeds.push(id);
+  if (id === "barkeep") state.hunger++;
+  return true;
+}
+// Leaving the bar ends the interview. The last person in the room is the barkeep.
+export function leaveBar(state) {
+  if (state.scene !== "bar") return false;
+  if (state.stage === "claim") judge(state, "slide");
+  else if (state.stage === "answer") state.decisions.push({ question: state.current, action: "slide" });
+  state.scene = "nightfall";
+  state.stage = "idle";
+  state.current = null;
+  state.held = null;
+  return true;
+}
+export function resolveNightfall(state, fate) {
+  if (state.scene !== "nightfall" || !["spared", "compelled", "fed"].includes(fate)) return false;
+  state.barkeep = fate;
+  if (fate === "fed") state.hunger += 2;
+  state.scene = "desk";
+  return true;
+}
+export const epilogues = {
+  spared:
+    "Downstairs at the Last Light, the barkeep is stacking chairs, alive, and he will never know how close it came. Neither will you, after a while.",
+  compelled:
+    "The barkeep will wake behind his counter with a sore neck and a story about a quiet customer who paid in cash. He will tell it wrong. You made sure of that.",
+  fed:
+    "By Friday the Last Light will have a new name over the door and an old one missing. You have already started his chapter. You write other people’s lives for a living. Usually, the dead ones.",
+};
+export const shelf =
+  "Above your desk: three hundred and eleven biographies in the same hand. You don’t remember writing them. Every subject is dead. One of them is you. It has been rewritten more often than the others.";
