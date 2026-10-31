@@ -231,7 +231,7 @@ void main(){
   gl_FragColor.rgb += g * 0.05;
 }`;
 
-export function startWorld(canvas, { reduced = false, hotspotLabel = () => null, onPick = () => {}, onHover = () => {} } = {}) {
+export function startWorld(canvas, { reduced = false, hotspotLabel = () => null, onPick = () => {}, onHover = () => {}, onHoverStart = () => {} } = {}) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: "high-performance" });
   renderer.setPixelRatio(1);
   renderer.shadowMap.enabled = true;
@@ -502,15 +502,86 @@ export function startWorld(canvas, { reduced = false, hotspotLabel = () => null,
   }
   deskWriter.group.visible = false;
   study.add(deskWriter.group);
+  // A real machine: glossy body, four rows of round keys, type bars, ribbon spools, a carriage that walks.
   const typewriter = tag("manuscript", new THREE.Group());
-  mesh(box(0.42, 0.1, 0.32), mat(0x161718, { roughness: 0.4 }), 0, 0.05, 0, typewriter);
-  mesh(box(0.36, 0.08, 0.12), mat(0x161718, { roughness: 0.4 }), 0, 0.13, -0.1, typewriter);
-  mesh(cyl(0.025, 0.025, 0.46, 8), mat(0x0d0d0d), 0, 0.17, -0.14, typewriter).rotation.z = Math.PI / 2;
-  const sheet = mesh(box(0.24, 0.3, 0.004), mat(0xe9e2cf), 0, 0.3, -0.16, typewriter);
+  const enamel = mat(0x141516, { roughness: 0.32, metalness: 0.25 });
+  const chrome = mat(0xb9b6ad, { roughness: 0.25, metalness: 0.85 });
+  const rubber = mat(0x0b0b0b, { roughness: 0.9 });
+  mesh(box(0.44, 0.03, 0.34), enamel, 0, 0.015, 0, typewriter);
+  mesh(box(0.42, 0.09, 0.17), enamel, 0, 0.075, -0.075, typewriter);
+  const deck = new THREE.Group();
+  deck.position.set(0, 0.06, 0.085);
+  deck.rotation.x = 0.3;
+  typewriter.add(deck);
+  mesh(box(0.42, 0.02, 0.17), enamel, 0, -0.01, 0, deck);
+  mesh(box(0.06, 0.012, 0.018), mat(0x9a7a3a, { metalness: 0.7, roughness: 0.35 }), 0, 0.045, -0.165, typewriter);
+  const keyCap = mat(0xddd3bd, { roughness: 0.5 }), keyStem = mat(0x2a2a2a, { metalness: 0.5 });
+  const keys = [];
+  [11, 11, 10, 9].forEach((count, row) => {
+    for (let i = 0; i < count; i++) {
+      const k = new THREE.Group();
+      mesh(cyl(0.0025, 0.0025, 0.02, 4), keyStem, 0, 0.01, 0, k);
+      mesh(cyl(0.0135, 0.0135, 0.004, 12), chrome, 0, 0.021, 0, k);
+      mesh(cyl(0.0115, 0.0115, 0.006, 12), keyCap, 0, 0.025, 0, k);
+      k.position.set((i - (count - 1) / 2) * 0.031 + (row % 2) * 0.008, 0, -0.06 + row * 0.033);
+      deck.add(k);
+      keys.push(k);
+    }
+  });
+  const spaceBar = new THREE.Group();
+  mesh(box(0.2, 0.008, 0.016), keyCap, 0, 0.02, 0, spaceBar);
+  for (const x of [-0.08, 0.08]) mesh(cyl(0.002, 0.002, 0.02, 4), keyStem, x, 0.01, 0, spaceBar);
+  spaceBar.position.set(0, 0, 0.078);
+  deck.add(spaceBar);
+  // The type basket: a fan of bars under a half-moon opening.
+  const basket = mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.012, 20, 1, false, -Math.PI / 2, Math.PI), mat(0x050505), 0, 0.122, -0.06, typewriter);
+  basket.rotation.y = Math.PI;
+  const typeBars = [];
+  for (let i = 0; i < 15; i++) {
+    const a = -Math.PI / 2 + ((i + 0.5) / 15) * Math.PI;
+    const bar = mesh(box(0.003, 0.002, 0.075), chrome, Math.sin(a) * 0.05, 0.13, -0.06 + Math.cos(a) * 0.05);
+    bar.rotation.y = a;
+    typewriter.add(bar);
+    typeBars.push(bar);
+  }
+  for (const x of [-0.13, 0.13]) {
+    mesh(cyl(0.036, 0.036, 0.01, 14), chrome, x, 0.125, -0.075, typewriter);
+    mesh(cyl(0.03, 0.03, 0.014, 14), mat(0x5a1410), x, 0.135, -0.075, typewriter);
+  }
+  // The carriage slides left a step for every letter and rings home.
+  const carriage = new THREE.Group();
+  typewriter.add(carriage);
+  mesh(box(0.5, 0.025, 0.05), chrome, 0, 0.145, -0.14, typewriter);
+  const platen = mesh(cyl(0.032, 0.032, 0.46, 16), rubber, 0, 0.19, -0.14, carriage);
+  platen.rotation.z = Math.PI / 2;
+  for (const x of [-0.25, 0.25]) mesh(cyl(0.034, 0.034, 0.03, 14), rubber, x, 0.19, -0.14, carriage).rotation.z = Math.PI / 2;
+  mesh(cyl(0.003, 0.003, 0.42, 6), chrome, 0, 0.215, -0.1, carriage).rotation.z = Math.PI / 2;
+  const lever = mesh(box(0.01, 0.01, 0.1), chrome, -0.22, 0.225, -0.09, carriage);
+  lever.rotation.set(0.35, 0.5, 0);
+  mesh(new THREE.SphereGeometry(0.012, 8, 6), chrome, -0.245, 0.24, -0.045, carriage);
+  const sheet = mesh(box(0.22, 0.3, 0.002), mat(0xe9e2cf), 0, 0.33, -0.165, carriage);
   sheet.rotation.x = -0.15;
-  typewriter.position.set(-0.15, 0.77, -0.75);
+  typewriter.position.set(-0.17, 0.77, -0.74);
   study.add(typewriter);
-  // The parcel opens in three movements: the string snaps, the lid comes off, the diary and letter rise.
+  const keyPress = new Float32Array(keys.length);
+  let spacePress = 0, strike = 0, strikeBar = 0, carriageX = 0.08, carriageTarget = 0.08;
+  function poseTypewriter(dt) {
+    const k = Math.exp(-dt * 18);
+    keys.forEach((key, i) => {
+      keyPress[i] *= k;
+      key.position.y = -keyPress[i] * 0.008;
+    });
+    spacePress *= k;
+    spaceBar.position.y = -spacePress * 0.006;
+    strike *= Math.exp(-dt * 14);
+    typeBars.forEach((b, i) => (b.rotation.x = i === strikeBar ? -strike * 1.1 : 0));
+    carriageX += (carriageTarget - carriageX) * (1 - Math.exp(-dt * (carriageTarget > carriageX ? 9 : 30)));
+    carriage.position.x = carriageX;
+    const tap = Math.max(...keyPress, spacePress);
+    deskWriter.arms.forEach((a, i) => (a.elbow.rotation.x = -1.0 - (i ? tap : keyPress[3]) * 0.12));
+  }
+  // The parcel opens slowly: the string gives, the lid comes off, the diary is lifted out and set down
+  // beside the box. The letter stays tucked between its pages, so nothing collides.
   const parcel = new THREE.Group();
   const kraft = mat(0x9b7b55), twine = mat(0xd9ccb0);
   const parcelBox = tag("parcel", new THREE.Group());
@@ -523,36 +594,36 @@ export function startWorld(canvas, { reduced = false, hotspotLabel = () => null,
   mesh(box(0.05, 0.02, 0.05), twine, 0, 0.02, 0, lid);
   const diary = tag("journal", new THREE.Group());
   mesh(box(0.22, 0.04, 0.3), mat(0x4a2a18), 0, 0, 0, diary);
-  mesh(box(0.2, 0.032, 0.285), mat(0xd8cdb4), 0.012, 0, 0, diary);
-  const letter = tag("journal", mesh(box(0.2, 0.004, 0.26), mat(0xe8e0cc)));
-  parcel.add(parcelBox, lid, diary, letter);
-  parcel.position.set(0.42, 0.77, -0.62);
+  mesh(box(0.2, 0.032, 0.285), mat(0xc9bc9c), 0.012, 0, 0, diary);
+  const letter = tag("letter", mesh(box(0.15, 0.004, 0.2), mat(0xeee6d2)));
+  letter.position.set(0.01, 0.003, -0.07);
+  letter.rotation.y = 0.14;
+  diary.add(letter);
+  parcel.add(parcelBox, lid, diary);
+  parcel.position.set(0.3, 0.77, -0.64);
   study.add(parcel);
   const smooth = (a, b, x) => THREE.MathUtils.smoothstep(x, a, b);
   let parcelOpenedAt = null;
   function poseParcel(now) {
     const t = parcelOpenedAt === null ? 0 : reduced ? 9 : (now - parcelOpenedAt) / 1000;
     // String: a tug, then it slackens and falls away.
-    const snap = smooth(0.25, 0.55, t);
+    const snap = smooth(0.4, 1.0, t);
     strings.forEach((st, i) => {
-      st.scale.set(1 + Math.sin(Math.min(t, 0.25) * 40) * 0.02, 1, 1);
+      st.scale.set(1 + Math.sin(Math.min(t, 0.4) * 30) * 0.02, 1, 1);
       st.position.y = -0.045 - snap * 0.03;
       st.rotation.z = i ? 0 : snap * 0.5;
       st.rotation.x = i ? snap * 0.5 : 0;
       st.visible = snap < 1;
     });
     // Lid: up, tipped back, set down behind the box.
-    const rise = smooth(0.45, 1.05, t), away = smooth(0.9, 1.7, t);
-    lid.position.set(away * 0.1, 0.128 + rise * 0.22 - away * 0.33, -away * 0.27);
-    lid.rotation.set(-rise * 0.5 + away * 0.5, away * 0.3, 0);
-    // Diary rises out of the box and lies across it; the letter slips out on top.
-    const up = smooth(1.3, 1.9, t), out = smooth(1.8, 2.6, t);
-    diary.position.set(-0.02, 0.09 + up * 0.16 - out * 0.115, out * 0.03);
-    diary.rotation.set(0, out * 0.25, Math.sin(up * Math.PI) * 0.12);
-    const slip = smooth(2.1, 2.9, t);
-    letter.position.set(0.02 + slip * 0.06, 0.1 + up * 0.17 - slip * 0.11, 0.02 + slip * 0.07);
-    letter.rotation.set(0, -slip * 0.5, Math.sin(slip * Math.PI) * 0.25);
-    diary.visible = letter.visible = t > 0;
+    const rise = smooth(0.9, 1.9, t), away = smooth(1.6, 2.9, t);
+    lid.position.set(-away * 0.04, 0.128 + rise * 0.22 - away * 0.33, -away * 0.3);
+    lid.rotation.set(-rise * 0.5 + away * 0.5, -away * 0.2, 0);
+    // Diary: lifted straight up once the lid is clear, then carried to the right and laid down.
+    const up = smooth(2.8, 3.8, t), across = smooth(3.7, 5.0, t);
+    diary.position.set(across * 0.31, 0.06 + up * 0.2 - across * 0.24 + Math.sin(across * Math.PI) * 0.04, across * 0.03);
+    diary.rotation.set(0, across * 0.18, Math.sin(up * Math.PI) * 0.06 - Math.sin(across * Math.PI) * 0.1);
+    diary.visible = t > 0;
   }
   const deskLamp = new THREE.Group();
   mesh(cyl(0.08, 0.1, 0.03, 10), mat(0x2b2b20, { metalness: 0.6 }), 0, 0.015, 0, deskLamp);
@@ -641,7 +712,7 @@ export function startWorld(canvas, { reduced = false, hotspotLabel = () => null,
   const camLook = new THREE.Vector3(...SHOTS["desk-parcel"].look);
   let shot = SHOTS["desk-parcel"];
   let fov = shot.fov;
-  const mood = { hunger: 0, presence: 0, night: 0, nightTarget: 0, fade: 1, fadeTarget: 0, glitch: 0, beat: 0, vanishUntil: 0, strangerGone: false, phase: "none", phaseAt: 0 };
+  const mood = { hunger: 0, presence: 0, night: 0, nightTarget: 0, fade: 1, fadeTarget: 0, fadeRate: 3, glitch: 0, beat: 0, vanishUntil: 0, strangerGone: false, phase: "none", phaseAt: 0 };
   const pointer = new THREE.Vector2(), parallax = new THREE.Vector2();
   let hovered = null, tappedAt = -Infinity;
 
@@ -666,7 +737,10 @@ export function startWorld(canvas, { reduced = false, hotspotLabel = () => null,
     if (name !== hovered) {
       if (hovered) setHighlight(hovered, false);
       hovered = name;
-      if (name) setHighlight(name, true);
+      if (name) {
+        setHighlight(name, true);
+        onHoverStart(name);
+      }
       canvas.style.cursor = name ? "pointer" : "";
     }
     onHover(name && hotspotLabel(name), e.clientX, e.clientY);
@@ -710,7 +784,7 @@ export function startWorld(canvas, { reduced = false, hotspotLabel = () => null,
     camera.fov = fov;
     camera.updateProjectionMatrix();
 
-    mood.fade += (mood.fadeTarget - mood.fade) * (1 - Math.exp(-dt * 3));
+    mood.fade += (mood.fadeTarget - mood.fade) * (1 - Math.exp(-dt * mood.fadeRate));
     mood.night += (mood.nightTarget - mood.night) * (1 - Math.exp(-dt * 0.9));
     mood.beat *= Math.exp(-dt * 5);
     mood.glitch = Math.max(0, mood.glitch - dt * 1.4);
@@ -747,6 +821,7 @@ export function startWorld(canvas, { reduced = false, hotspotLabel = () => null,
       e.material.color.setRGB(glint, glint * 0.1, glint * 0.05);
     });
     poseParcel(now);
+    poseTypewriter(dt);
     ember.updateWorldMatrix(true, false);
     const emberAt = new THREE.Vector3().setFromMatrixPosition(ember.matrixWorld);
     for (const s of smoke) {
@@ -811,14 +886,28 @@ export function startWorld(canvas, { reduced = false, hotspotLabel = () => null,
       resize();
     },
     shot: setShot,
-    // A hard cut through black, for changes of place.
-    cut(name, then) {
+    // A cut through black, for changes of place. A slow cut lingers in the dark, then the camera
+    // drifts in from further back as the room fades up.
+    cut(name, then, { slow = false, hold = 0 } = {}) {
+      mood.fadeRate = slow ? 1.5 : 3;
       mood.fadeTarget = 1;
       setTimeout(() => {
         setShot(name, { cut: true });
+        if (slow && !reduced) camPos.add(new THREE.Vector3(...shot.pos).sub(new THREE.Vector3(...shot.look)).setLength(2.2));
         then?.();
-        mood.fadeTarget = 0;
-      }, reduced ? 0 : 650);
+        setTimeout(() => (mood.fadeTarget = 0), reduced ? 0 : hold);
+      }, reduced ? 0 : slow ? 2000 : 650);
+    },
+    // One keystroke: a key goes down, a type bar strikes, the carriage steps left.
+    typeKey(char) {
+      if (char === " ") spacePress = 1;
+      else keyPress[Math.floor(Math.random() * keys.length)] = 1;
+      strike = 1;
+      strikeBar = Math.floor(Math.random() * typeBars.length);
+      carriageTarget = Math.max(-0.1, carriageTarget - 0.0025);
+    },
+    carriageReturn() {
+      carriageTarget = 0.08;
     },
     parcel(open) {
       parcelOpenedAt = open ? performance.now() : null;

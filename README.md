@@ -4,7 +4,7 @@ A horror detective-novel about a biographer who interviews a man whose memories 
 
 [Play in your browser](https://krymancer.github.io/bottleography/).
 
-Plain JavaScript, HTML/CSS and [three.js](https://threejs.org) (r186, vendored and minified in `vendor/`, MIT). There's no bundler, runtime install, analytics or backend, and nothing loads from a third-party host. The bar and the study are built from primitives in `world3d.js`. They render at low resolution and go through a Kuwahara "oil paint" pass, grain, and a red grade that deepens with the hunger. Labels use the bundled [Jersey 10](https://fonts.google.com/specimen/Jersey+10) (SIL OFL); prose uses the system's book serif. Sound is synthesized locally: rain, glass, lighter, typewriter ticks, a heartbeat, and the drone at nightfall.
+Plain JavaScript, HTML/CSS and [three.js](https://threejs.org) (r186, vendored and minified in `vendor/`, MIT). There's no bundler, runtime install, analytics or backend, and nothing loads from a third-party host. The bar and the study are built from primitives in `world3d.js`. They render at low resolution and go through a Kuwahara "oil paint" pass, grain, and a red grade that deepens with the hunger. Labels use the bundled [Jersey 10](https://fonts.google.com/specimen/Jersey+10) (SIL OFL); the letter and diary use bundled [Caveat](https://fonts.google.com/specimen/Caveat) and [Cedarville Cursive](https://fonts.google.com/specimen/Cedarville+Cursive) (SIL OFL); prose uses the system's book serif. Sound is synthesized locally: rain, a music box over a low pad, paper, glass, lighter, typewriter keys and bell, a heartbeat, and the drone at nightfall.
 
 ## Play locally
 
@@ -14,11 +14,11 @@ Requires Node.js 20+ for the development scripts. No install step.
 npm run dev
 ```
 
-Open http://localhost:5173. Audio starts on the first click or keypress. The painted room fills the screen and dialogue runs as subtitles along the bottom, one line at a time. Click anywhere or press Space/Enter to finish a line, then again for the next one. Pick responses with the mouse or the number keys 1–9. Choices in parentheses are things you do; the rest you say aloud. J opens the journal, M opens the manuscript at the desk, and H shows everything said so far. Hover objects in the room to interact: the parcel, the journal, the typewriter, the bar lamp. Reduced-motion preferences turn off text reveal, camera drift, glitches and flicker.
+Open http://localhost:5173. Audio starts on the first click or keypress. The painted room fills the screen and dialogue runs as subtitles along the bottom, one line at a time. Click anywhere or press Space/Enter to finish a line, then again for the next one. Pick responses with the mouse or the number keys 1–9. Choices in parentheses are things you do; the rest you say aloud. J opens the diary, M opens the manuscript at the desk, and H shows everything said so far. Hover objects in the room to interact: the parcel, the letter, the diary, the typewriter, the bar lamp. Reduced-motion preferences turn off text reveal, camera drift, glitches and flicker.
 
-1. **Three nights ago.** Untie the parcel and read the letter and the diary.
-2. **The Last Light.** Meet him first: his name, his age, why he wants a book. Each answer has one follow-up. **About the journal** moves on. You can stand up and leave at any time.
-3. **The journal.** Ask one of four questions, then **Keep listening** to reach the statement you can judge. **Show him a page** opens the journal. Present the scrap that contradicts him (a wrong page costs nothing), believe him, or let it slide.
+1. **Three nights ago.** Untie the parcel. Read the letter tucked inside the diary, then the diary itself. Both explain why you go.
+2. **The Last Light.** Meet him first: where the diary came from, what is happening to him, why he wants a book, who he is. Each answer has one follow-up. **Tell me about Bellwether** moves on. You can stand up and leave at any time.
+3. **The journal.** Ask one of four questions, then **Keep listening** to reach the statement you can judge. **Show him the line** opens the diary. Present the scrap that contradicts him (a wrong page costs nothing), believe him, or let it slide.
 4. **Small things.** Some choices are things you do rather than say: check your pocket, take your own pulse, look in the mirror, watch the barkeep. Each happens once.
 5. **Closing time.** When you leave, the twist plays out and the barkeep is alone with you. Pay and leave, make him forget you, or let the lights go out.
 6. **The desk.** Write the three chapter lines. Each one is a choice between the man you met and the man in the journal. The end card names your version (**A good man** or **A psycho**) and what happened to the barkeep.

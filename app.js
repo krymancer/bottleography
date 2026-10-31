@@ -9,6 +9,8 @@ import {
   pickBeat,
   doDeed as markDeed,
   opening,
+  letter,
+  diaryPages,
   introductions,
   leaveBar,
   resolveNightfall,
@@ -22,8 +24,9 @@ import { sfx, unlock, ambience } from "./audio.js";
 const $ = (id) => document.getElementById(id);
 const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
 let state = freshState();
-let openingIndex = 0;
 let parcelOpened = false;
+let read = { letter: false, diary: false };
+let onPageClosed = null;
 let queue = [];
 let after = null;
 let typing = null;
@@ -72,13 +75,18 @@ function say(e, done) {
     return done();
   }
   let n = 0;
+  const typed = kindOf(e) === "typed";
   typing = { body, text: e.text, done };
   typing.timer = setInterval(() => {
-    n += 2;
+    n += typed ? 1 : 2;
     body.textContent = e.text.slice(0, n).replace(/\*/g, "");
-    if (n % 12 === 0 && kindOf(e) === "typed") sfx("tick");
+    if (typed) {
+      const ch = e.text[n - 1];
+      world.typeKey(ch);
+      sfx(ch === " " ? "space" : "key");
+    }
     if (n >= e.text.length) finishTyping();
-  }, 22);
+  }, typed ? 70 : 22);
 }
 function showTitle(text) {
   const card = $("title-card");
@@ -176,86 +184,125 @@ function place(text) {
   el.classList.add("show");
 }
 
-// ——— Journal pages ———
-const letterHTML =
-  '<div class="journal-top"><span>THREE NIGHTS AGO</span><span>NO RETURN ADDRESS</span></div><h2>An invitation.</h2><p class="draft-line letter">You write lives for a living.<br><br>I am having trouble remembering mine.<br><br>The Last Light. Thursday. Before midnight.<br><br>Bring the pages. Come alone.</p>';
-function journal() {
+// ——— Pages: the letter and the diary, in two different hands ———
+const damaged = (text) => rich(text).replace(/\[\[(.+?)\]\]/g, '<span class="lost">$1</span>');
+function letterPage() {
+  $("journal").className = "journal page letter-page";
+  $("journal").innerHTML = letter.map((p) => `<p>${escape(p)}</p>`).join("") + '<p class="blot"></p>';
+}
+function diaryPage() {
   const j = $("journal");
   const presenting = state.scene === "bar" && state.stage === "claim" && questions[state.current]?.scrap !== null;
-  j.innerHTML =
-    (state.scene === "bar" ? "" : letterHTML) +
-    '<div class="journal-top"><span>EXHIBIT 01</span><span>FOUND, NOT GIVEN</span></div><h2>A borrowed memory.</h2><p class="intro">Three lines from a water-damaged journal. The handwriting feels almost familiar.</p>';
-  scraps.forEach((scrap, i) => {
-    const pinned = state.decisions.some((d) => d.action === "pin" && questions[d.question].scrap === i);
+  j.className = `journal page diary-page${presenting ? " presenting" : ""}`;
+  j.innerHTML = presenting ? '<p class="ask">Which line says otherwise?</p>' : "";
+  for (const page of diaryPages) {
+    if (page.scrap === undefined) {
+      const p = document.createElement("div");
+      p.className = "entry";
+      p.innerHTML = `${page.date ? `<p class="date">${page.date}</p>` : ""}<p>${damaged(page.text)}</p>`;
+      j.append(p);
+      continue;
+    }
+    const scrap = scraps[page.scrap];
     const b = document.createElement("button");
-    b.className = "scrap";
+    b.className = "entry scrap";
     b.disabled = !presenting;
-    b.innerHTML = `<img class="evidence-art" src="./assets/evidence-${["fire", "key", "river"][i]}.png" alt="" width="24" height="24"><small>${String(i + 1).padStart(2, "0")} / ${scrap.date}</small><p>${scrap.text}</p><span class="scrap-state">${presenting ? "SHOW HIM THIS PAGE" : pinned ? "PINNED IN YOUR NOTES" : state.scene === "bar" ? "WAIT FOR A LINE THAT CLASHES" : "FROM THE JOURNAL"}</span>`;
-    b.onclick = () => present(i);
+    b.innerHTML = `<p class="date">${scrap.date.toLowerCase().replace(/^\w|\s\w/g, (c) => c.toUpperCase())}</p><p>${damaged(page.before)} <span class="key-line">${escape(scrap.text)}</span> ${damaged(page.after)}</p>`;
+    b.onclick = () => present(page.scrap);
     j.append(b);
-  });
-  const notes = document.createElement("div");
-  notes.className = "notes";
-  notes.innerHTML = "<strong>YOUR MARGIN NOTES</strong>";
-  if (!state.decisions.length) notes.innerHTML += "<p>No judgments. Yet.</p>";
-  for (const d of state.decisions)
-    notes.innerHTML += `<p>${questions[d.question].topic.toLowerCase()}: ${d.action === "pin" ? "contradiction pinned" : d.action === "believe" ? "account believed" : "left unresolved"}</p>`;
-  j.append(notes);
+  }
 }
 function draft() {
   const j = $("journal");
+  j.className = "journal manuscript";
   j.innerHTML = '<div class="journal-top"><span>MANUSCRIPT</span><span>CHAPTER 01</span></div><h2>What remains.</h2><p class="intro">A version of a life. In your words.</p>';
   for (const p of state.picks) j.innerHTML += `<p class="draft-line">${escape(p.text)}</p>`;
   if (state.picks.length < beats.length) j.innerHTML += `<p class="empty-draft">${state.picks.length ? "The next line is still yours." : "The page waits for someone to decide what happened."}</p>`;
 }
-function openJournal(kind = "journal") {
-  kind === "manuscript" ? draft() : journal();
+function openJournal(kind = "diary", then = null) {
+  if (kind === "manuscript") draft();
+  else if (kind === "letter") letterPage();
+  else diaryPage();
+  onPageClosed = then;
+  hideChoices();
   if (!$("journal-dialog").open) $("journal-dialog").showModal();
+  sfx("paper");
 }
 function closeJournal() {
   if ($("journal-dialog").open) $("journal-dialog").close();
 }
 function inspectJournal() {
   if (!parcelOpened) return openParcel();
-  if (openingIndex === 0) return readDiary();
+  if (state.scene === "study") return readDiary();
   openJournal();
 }
 
 // ——— Three nights ago ———
+// Run later, unless the scene has moved on by then.
+function later(ms, fn) {
+  const g = generation;
+  setTimeout(() => g === generation && fn(), reduce ? 0 : ms);
+}
 function start() {
+  state.scene = "study";
   place("YOUR STUDY — THREE NIGHTS AGO");
   world.cut("desk-parcel");
-  play([title(opening[0].title), narr(opening[0].text), ...aside("opening-0")], [{ text: "(Untie the parcel.)", fn: openParcel }]);
+  play([title(opening.title), ...opening.arrive.map((t) => narr(t)), ...aside("opening-0")], [{ text: "(Untie the parcel.)", fn: openParcel }]);
 }
 function openParcel() {
   if (parcelOpened) return;
   parcelOpened = true;
+  generation++;
+  finishTyping();
   hideChoices();
+  $("subtitle").replaceChildren();
   world.parcel(true);
   sfx("spark");
-  setTimeout(() => sfx("glass"), reduce ? 0 : 900);
-  // Let the lid come off before anyone speaks.
-  const g = ++generation;
-  setTimeout(() => {
-    if (g !== generation) return;
-    play(
-      [narr("The string gives. Under the lid: a battered diary and a letter. No signature. The paper smells faintly of river water."), ...aside("parcel")],
-      [{ text: "(Read the letter and the diary.)", fn: readDiary }],
-    );
-  }, reduce ? 0 : 2300);
+  later(1500, () => sfx("paper"));
+  later(3200, () => sfx("paper"));
+  // Let the lid come off and the diary settle before anyone speaks.
+  later(5200, () => play([narr(opening.opened)], studyChoices));
+}
+function studyChoices() {
+  return [
+    !read.letter && { text: "(Unfold the letter.)", fn: readLetter },
+    !read.diary && { text: "(Open the diary.)", fn: readDiary },
+    read.letter && read.diary && { text: opening.go, fn: toBar },
+  ];
+}
+function afterReading() {
+  return read.letter && read.diary ? [narr(opening.bothRead)] : [];
+}
+function readLetter() {
+  if (!parcelOpened) return openParcel();
+  openJournal("letter", () => {
+    if (read.letter) return showChoices(studyChoices());
+    read.letter = true;
+    play([...aside("letter"), ...afterReading()], studyChoices);
+  });
 }
 function readDiary() {
-  if (openingIndex > 0) return openJournal();
-  openingIndex = 1;
-  openJournal();
-  play([title(opening[1].title), narr(opening[1].text), ...aside("opening-1")], [{ text: `(${opening[1].next}.)`, fn: toBar }]);
+  if (!parcelOpened) return openParcel();
+  openJournal("diary", () => {
+    if (state.scene !== "study") return;
+    if (read.diary) return showChoices(studyChoices());
+    read.diary = true;
+    play([...aside("diary"), ...afterReading()], studyChoices);
+  });
 }
 function toBar() {
   closeJournal();
-  openingIndex = 2;
-  place("THE LAST LIGHT — 23:40");
-  world.cut("bar", () => world.strangerArrives());
-  play([title(opening[2].title), narr(opening[2].text), ...aside("opening-2")], [{ text: `(${opening[2].next}.)`, fn: beginInterview }]);
+  generation++;
+  hideChoices();
+  $("subtitle").replaceChildren();
+  state.scene = "bar";
+  state.stage = "arriving";
+  world.cut("bar", () => world.strangerArrives(), { slow: true, hold: 2400 });
+  later(2200, () => showTitle(opening.barTitle));
+  later(5000, () => {
+    place("THE LAST LIGHT — THURSDAY, 23:40");
+    play([...opening.bar.map((t) => narr(t)), ...aside("opening-2")], [{ text: opening.sit, fn: beginInterview }]);
+  });
 }
 
 // ——— The interview ———
@@ -272,12 +319,20 @@ function beginInterview() {
   state.stage = "idle";
   world.shot("table");
   sfx("glass");
-  play([line("“You’re late. Or I’m early. After a while, the years stop keeping their side of the bargain.” He nudges a glass toward you. “You brought your questions?”"), ...aside("interview")], introHub);
+  play(
+    [
+      narr("You pull out the chair. The legs scrape on the boards. He lets the sound die completely before he speaks."),
+      line("“You came. They mostly don’t, the ones I write to.” He nudges a glass toward you, across the wet ring of another. “You read her diary, and you still sat down. That’s either very brave or very foolish, and I’ve never been able to tell those two apart.”"),
+      ...aside("interview"),
+      line("“Go on, then. Ask. That’s what you’re for.”"),
+    ],
+    introHub,
+  );
 }
 function introHub() {
   return [
     ...introductions.map((q, i) => ({ text: q.short, done: state.introductionsAsked.includes(i), fn: () => askIntroduction(i) })),
-    { text: "About the journal.", fn: beginJournalQuestions },
+    { text: "Tell me about Bellwether.", fn: beginJournalQuestions },
     leaveChoice(),
   ];
 }
@@ -286,7 +341,7 @@ function askIntroduction(i) {
   state.currentIntroduction = i;
   state.introductionsAsked.push(i);
   state.stage = "introduction-answer";
-  const choices = () => [{ text: q.followUp, fn: () => followUp(i) }, i === 2 && deedChoice("pocket", choices)];
+  const choices = () => [{ text: q.followUp, fn: () => followUp(i) }, i === 1 && deedChoice("pocket", choices)];
   play([you(q.short), line(q.answer), ...aside(`intro-${i}-answer`)], choices);
 }
 function followUp(i) {
@@ -297,7 +352,14 @@ function followUp(i) {
 function beginJournalQuestions() {
   state.round = "journal";
   state.stage = "idle";
-  play([narr("You turn the copied pages toward him."), line("“All right. What does she say I did?”"), ...aside("journal-round")], journalHub);
+  play(
+    [
+      narr("You open the diary on the table between you, the three legible entries face up. He doesn’t look down at them. He doesn’t need to."),
+      line("“Bellwether. Once upon a time, as they say.” He smiles at nothing. “All right. What does she say I did?”"),
+      ...aside("journal-round"),
+    ],
+    journalHub,
+  );
 }
 function journalHub() {
   state.stage = "idle";
@@ -324,7 +386,7 @@ function showClaim() {
 }
 function claimChoices() {
   return [
-    questions[state.current].scrap !== null && { text: "(Show him a page from the journal.)", fn: () => openJournal(), keep: true },
+    questions[state.current].scrap !== null && { text: "(Open the diary. Show him the line.)", fn: () => openJournal(), keep: true },
     { text: "I believe you.", fn: () => decide("believe") },
     { text: "(Let it slide.)", fn: () => decide("slide") },
     leaveChoice(),
@@ -335,7 +397,7 @@ function present(i) {
   closeJournal();
   const q = questions[state.current];
   state.held = i;
-  const shown = narr(`You slide a page across the table. “${scraps[i].text}”`);
+  const shown = narr(`You turn the diary toward him, your finger under one line. “${scraps[i].text}”`);
   if (judge(state, "pin")) {
     sfx("pin");
     world.hunger(state.hunger);
@@ -383,14 +445,24 @@ function goHomeChoice() {
   return [{ text: "(Go home. Write it down while you still know what it means.)", fn: goHome }];
 }
 function goHome() {
-  place("YOUR STUDY — 03:12");
-  world.cut("desk", () => {
-    world.resetNight();
-    world.writerAtDesk(true);
-    ambience(true, { night: false });
+  generation++;
+  hideChoices();
+  $("subtitle").replaceChildren();
+  world.cut(
+    "desk",
+    () => {
+      world.resetNight();
+      world.writerAtDesk(true);
+      world.carriageReturn();
+      ambience(true, { night: false });
+    },
+    { slow: true, hold: 1200 },
+  );
+  later(3600, () => {
+    place("YOUR STUDY — 03:12");
+    sfx("lighter");
+    renderDesk();
   });
-  sfx("lighter");
-  renderDesk();
 }
 
 // ——— The desk ———
@@ -408,7 +480,11 @@ function pick(i) {
   if (!pickBeat(state, i)) return;
   const p = state.picks.at(-1);
   world.hunger(state.hunger);
-  play([{ kind: "typed", text: p.text }, ...aside(`pick-${p.tone}`)], () => (state.scene === "end" ? renderEnd() : renderDesk()));
+  play([{ kind: "typed", text: p.text }, ...aside(`pick-${p.tone}`)], () => {
+    world.carriageReturn();
+    sfx("ding");
+    return state.scene === "end" ? renderEnd() : renderDesk();
+  });
 }
 function renderEnd() {
   world.shot("shelf");
@@ -428,8 +504,8 @@ function showEnd() {
 }
 function restart() {
   state = freshState();
-  openingIndex = 0;
   parcelOpened = false;
+  read = { letter: false, diary: false };
   $("end").hidden = true;
   $("history").replaceChildren();
   closeJournal();
@@ -445,7 +521,8 @@ const world = startWorld($("world"), {
   reduced: reduce,
   hotspotLabel(name) {
     if (name === "parcel") return parcelOpened ? null : "Untie the parcel";
-    if (name === "journal") return parcelOpened && (state.scene === "bar" || openingIndex < 2) ? "Read the journal [J]" : null;
+    if (name === "journal") return parcelOpened && (state.scene === "bar" || state.scene === "study") ? "The diary [J]" : null;
+    if (name === "letter") return parcelOpened && state.scene === "study" ? "The letter" : null;
     if (name === "manuscript") return state.scene === "desk" || state.scene === "end" ? "Read your manuscript [M]" : null;
     if (name === "lamp") return state.scene === "bar" ? "The lamp" : null;
     return null;
@@ -453,8 +530,12 @@ const world = startWorld($("world"), {
   onPick(name) {
     if (name === "parcel") openParcel();
     else if (name === "journal") inspectJournal();
+    else if (name === "letter") readLetter();
     else if (name === "manuscript") openJournal("manuscript");
     else if (name === "lamp") sfx("spark");
+  },
+  onHoverStart(name) {
+    if (name === "letter" || name === "journal") sfx("paper");
   },
   onHover(label, x, y) {
     const tip = $("tooltip");
@@ -472,6 +553,11 @@ for (const el of [$("world"), $("subtitle")])
   });
 $("journal-toggle").onclick = inspectJournal;
 $("journal-close").onclick = closeJournal;
+$("journal-dialog").addEventListener("close", () => {
+  const then = onPageClosed;
+  onPageClosed = null;
+  then?.();
+});
 $("history-toggle").onclick = () => $("history-dialog").showModal();
 $("history-close").onclick = () => $("history-dialog").close();
 for (const id of ["journal-dialog", "history-dialog"])

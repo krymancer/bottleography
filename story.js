@@ -1,45 +1,76 @@
-export const opening = [
-  {
-    title: "A letter without a name.",
-    text: "You write other people’s lives for a living. Usually, the dead ones. Three nights ago, a package arrived at your door: a damaged journal and a letter from a man who says he is forgetting his own life. He wants you to write it before it disappears.",
-    next: "Unwrap the journal",
-  },
-  {
-    title: "The dates cannot be right.",
-    text: "Most of the journal is ruined. Three passages still mention a village called Bellwether, a fire, and a man who should have died. The dates put him three centuries in the past. A hoax, probably. But you copied the passages and came to hear his version.",
-    next: "Find the last table",
-  },
-  {
-    title: "Someone is waiting in the dark.",
-    text: "The Last Light smells of wet coats and yesterday’s smoke. At the back, a cigarette ember lifts. Your eyes adjust around it: a hand, a shoulder, a man watching you. You set the journal on the table. Tonight, you listen. Back home, you will decide what makes it onto the page.",
-    next: "Take a seat",
-  },
+// The study, three nights ago. Nothing is explained here; the letter and the diary do that.
+export const opening = {
+  title: "A parcel with your name on it.",
+  arrive: [
+    "Rain all evening. Someone knocked once, and by the time you reached the door there was nobody on the step. Only a parcel, wrapped in brown paper gone soft with wet.",
+    "No stamp. No return address. Just your name across the top, in ink that has started to run.",
+  ],
+  opened:
+    "The string gives. Under the lid, wrapped in oilcloth: a diary, swollen fat with water, its cover gone soft as skin. Something pale is tucked between its pages. A folded letter.",
+  bothRead:
+    "The dates in the diary say 1683. A hoax, then. A sick joke, or a sad old man with a story he needs someone to believe. You copy the three legible entries into your notebook anyway, and you mark Thursday on the calendar.",
+  go: "(Thursday. Go to the Last Light.)",
+  barTitle: "The Last Light.",
+  bar: [
+    "Thursday comes the way bad news does: slowly, then all at once. The Last Light sits at the end of Wharf Street with half its sign burned out, and the rain has been at it all night.",
+    "Inside: wet coats, yesterday’s smoke, a barkeep polishing a glass that is already clean. Every table is empty but one.",
+    "At the back, where the lamp gives up, a cigarette ember lifts. A hand. A shoulder. A hat brim, tipped low.",
+  ],
+  sit: "(Sit down across from him.)",
+};
+
+// The letter is in the immortal's hand, which is to say, yours.
+export const letter = [
+  "To the biographer,",
+  "You write other people’s lives. I am told you write them well, and that you never let a dead man have the last word.",
+  "I am not dead. Not yet, and not in the way you would mean it. But I am forgetting. Faces first, then names, then whole years. They go out like lamps down a long street, one by one, and soon there will be nothing left but the dark at the end of it.",
+  "The diary in this parcel is the only account of me I did not write myself. It is not kind. Read it before we meet, so you know what to ask.",
+  "I want a book. Something with covers. Something that stays put when I can’t.",
+  "The Last Light, on Wharf Street. Thursday, before midnight. I will be at the last table, at the back, where the lamp doesn’t reach.",
+  "Bring the diary. Come alone. And don’t believe everything I tell you.",
+];
+
+// Water took most of the diary. [[...]] marks what it took.
+export const diaryPages = [
+  { date: "16 October 1683", text: "Snow before the harvest is in. [[The Aldous children]] sleep in the chapel now, it is the only roof that does not leak. [[He came to us in the spring and]] no one can say where from. [[Mother says]]" },
+  { scrap: 0, before: "[[Rats in the grain again.]] Tonight I saw him at the well, and then I saw [[him go down the lane with]]", after: "[[God keep us. God keep]]" },
+  { scrap: 1, before: "We are in the chapel, those of us left.", after: "[[He looked at the key a long time. Then he looked at me, and he]]" },
+  { scrap: 2, before: "[[I went down to the ferry at first light.]]", after: "[[He sat up anyway. He thanked the ferryman.]] I will not write his name. If I write it down he will [[come]]" },
+  { date: "", text: "[[...]] whoever finds this [[...]] do not let him tell it." },
 ];
 
 export const introductions = [
   {
-    short: "Before we start—what’s your name?",
+    short: "Where did you get this diary?",
+    answer:
+      "I didn’t get it. It gets me. It turns up. A trunk in a house I’d forgotten I owned. A pawnshop window in a city I swore I’d never go back to. Once in the pocket of a coat I’d bought new that morning. Every time a little wetter. Every time a few more pages gone to the water.",
+    followUp: "Who wrote it?",
+    reply:
+      "A woman from Bellwether. I knew her, I think. I remember the back of her hand, the ink on her knuckle. Not her face. She wrote everything down, that one. As if the page could keep things from happening. I suppose it did keep them, in the end. Just not from happening.",
+  },
+  {
+    short: "Your letter says you’re forgetting. What’s happening to you?",
+    answer:
+      "You know how a story changes when you tell it too often? The edges wear off. That’s me. Faces go first, then names, then whole cities. Last month I found a photograph in my coat pocket. A woman on a sea wall. On the back, in my hand: ‘Our second summer.’ I sat with it all afternoon. Nothing. I still keep checking the pocket.",
+    followUp: "How long has this been happening?",
+    reply:
+      "How long have I been alive, you mean. I was forty-three for a while. Then a woman I’d known as a child came into my shop with her grandson, and I moved before the end of the month. The village in that diary was three hundred years ago. I was already lying about my age then. Before that… a house by the sea. I can’t tell you which came first.",
+  },
+  {
+    short: "Why do you want a book written? Why me?",
+    answer:
+      "Because I’ve tried writing it myself. I read it back the next morning and change things. A reason I must have had. Something I’m sure I couldn’t have done. After a week it’s a very comfortable story. A fairy tale, where the woodcutter is always the woodcutter and never the wolf.",
+    followUp: "That doesn’t answer why me.",
+    reply:
+      "Because you write the dead, and the dead don’t get to argue. I need someone who’ll ask how I know. Who won’t let me change the subject. Put it between two covers, where I can’t quietly rub it out on a bad night. And you have such good handwriting. I’ve always thought so.",
+  },
+  {
+    short: "Who are you?",
     answer:
       "Depends who’s asking. A few decades, a few marriages, five or six cities… you pick up names. Sometimes a wife shortens one. Sometimes you need a new one to get work. I used to be careful about which one I answered to. Now they all sound about the same.",
     followUp: "What about your first name?",
     reply:
       "I’ve tried. There’s a memory of someone calling me in from outside. My mother, I think. I can hear that she’s annoyed. I can’t hear the word. What frightens me is that you could say my first name right now, and I might not even look up.",
-  },
-  {
-    short: "How old are you, exactly?",
-    answer:
-      "Exactly is asking a lot. I was forty-three for a while. That’s what I told people, anyway. Then a woman I’d known as a child came into my shop with her grandson. I sold her a pair of gloves and moved before the end of the month.",
-    followUp: "You must have some idea.",
-    reply:
-      "The village in those pages was three hundred years ago. I was already lying about my age then. Before that… I remember living by the sea. I remember a house I built. I can’t tell you which came first. I could give you a number, but you’d write it down, and then we’d both start believing it.",
-  },
-  {
-    short: "Asking a stranger to write your life is unusual. Why a book?",
-    answer:
-      "Last month I found a photograph of a woman in my coat pocket. There was writing on the back. Mine. ‘Our second summer.’ I sat with it all afternoon. Nothing. I didn’t know whether I’d loved her, or whether she’d been happy. I still keep checking the pocket.",
-    followUp: "Why not write it yourself?",
-    reply:
-      "I have. I read it the next morning and change things. A reason I must have had. Something I’m sure I couldn’t have done. After a week, it’s a very comfortable story. I need someone who’ll ask how I know. Who won’t let me change the subject. Put it in a book. Something I can’t quietly rub out when I’m having a bad night.",
   },
 ];
 
