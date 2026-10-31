@@ -1,10 +1,10 @@
-# Bottleography — one-night POC
+# Bottleography — usually, the dead ones
 
-A browser visual novel about interviewing a man whose memories have outlived their owners. Ask, compare his words with a damaged journal, then write one version of his life. The larger story's identity reveal is deliberately absent; there is one quiet verbal echo.
+A horror detective-novel about a biographer who interviews a man whose memories have outlived their owners. Ask him questions, compare his words with a damaged journal, then write one version of his life: the man you sat with, or the madman in the stories. By closing time you learn there was never a stranger. The biographer and the immortal are the same man, and the last person left in the Last Light is the barkeep.
 
 [Play in your browser](https://krymancer.github.io/bottleography/).
 
-Plain JavaScript, HTML/CSS, and a 480 × 240 canvas. No engine, runtime packages, analytics, or backend. Nothing loads from a third-party host: the scenery, the dialogue frames, buttons and icons are locally bundled Aseprite pixel art, and the two pixel typefaces ([Pixelify Sans](https://fonts.google.com/specimen/Pixelify+Sans) for prose, [Jersey 10](https://fonts.google.com/specimen/Jersey+10) for labels, both SIL OFL) ship in `assets/fonts`. Python is only needed for the optional MCP development tooling. Sound is synthesized locally: glass, lighter, text/typewriter ticks.
+Plain JavaScript, HTML/CSS and [three.js](https://threejs.org) (r186, vendored and minified in `vendor/`, MIT). There's no bundler, runtime install, analytics or backend, and nothing loads from a third-party host. The bar and the study are built from primitives in `world3d.js`. They render at low resolution and go through a Kuwahara "oil paint" pass, grain, and a red grade that deepens with the hunger. Labels use the bundled [Jersey 10](https://fonts.google.com/specimen/Jersey+10) (SIL OFL); prose uses the system's book serif. Sound is synthesized locally: rain, glass, lighter, typewriter ticks, a heartbeat, and the drone at nightfall.
 
 ## Play locally
 
@@ -14,17 +14,16 @@ Requires Node.js 20+ for the development scripts. No install step.
 npm run dev
 ```
 
-Open http://localhost:5173. Sound is always enabled and starts on the first click or keypress, as required by browser audio policies. Click dialogue or press Space to reveal it immediately, then advance to the responses. Dialogue and choices appear in turns; selecting a response fades it out before the next line. Use Tab/Enter to navigate controls; J opens/closes the journal, M opens the manuscript upstairs, and Escape closes the pages (or reveals text/releases a scrap when pages are closed). The top-right fullscreen control requests browser fullscreen. Reduced-motion preferences disable text reveal and scene movement.
+Open http://localhost:5173. Audio starts on the first click or keypress. The painted room fills the screen and dialogue runs as subtitles along the bottom, one line at a time. Click anywhere or press Space/Enter to finish a line, then again for the next one. Pick responses with the mouse or the number keys 1–9. Choices in parentheses are things you do; the rest you say aloud. J opens the journal, M opens the manuscript at the desk, and H shows everything said so far. Hover objects in the room to interact: the parcel, the journal, the typewriter, the bar lamp. Reduced-motion preferences turn off text reveal, camera drift, glitches and flicker.
 
-The scene fills the window, with dialogue and compact, centered choices taking turns in a translucent overlay. The ending expands into a large panel with the completed manuscript. Open the pixel-art parcel, then click the diary to read the surviving pages. Hover or focus an object to highlight it. The stranger fades into view at the bar; reduced-motion mode reveals him immediately and disables lamp flicker and the occasional cigarette puff. Clicking the bar lamp secretly triggers a voltage dip and a short electrical crackle (sound only with reduced motion).
+1. **Three nights ago.** Untie the parcel and read the letter and the diary.
+2. **The Last Light.** Meet him first: his name, his age, why he wants a book. Each answer has one follow-up. **About the journal** moves on. You can stand up and leave at any time.
+3. **The journal.** Ask one of four questions, then **Keep listening** to reach the statement you can judge. **Show him a page** opens the journal. Present the scrap that contradicts him (a wrong page costs nothing), believe him, or let it slide.
+4. **Small things.** Some choices are things you do rather than say: check your pocket, take your own pulse, look in the mirror, watch the barkeep. Each happens once.
+5. **Closing time.** When you leave, the twist plays out and the barkeep is alone with you. Pay and leave, make him forget you, or let the lights go out.
+6. **The desk.** Write the three chapter lines. Each one is a choice between the man you met and the man in the journal. The end card names your version (**A good man** or **A psycho**) and what happened to the barkeep.
 
-1. Meet him first: ask his name, age, and why he wants a book. Each has a conversational follow-up. These questions do not award judgment points. Select **About the journal** whenever you want to move on, or leave for the desk even during this first round.
-2. Ask one of four journal questions. Select **Keep listening** to reach the statement you can judge.
-3. Click the journal on the table (or press J), select a scrap, then click his statement or **Pin contradiction**. Selecting a scrap closes the pages and returns focus to the dialogue. A mismatched scrap does not punish you. You can instead believe him or let it slide.
-4. Return to the question list. **Leave & write** is always available, including before asking anything. Leaving mid-answer treats that topic as unresolved.
-5. Pick three chapter lines. Click the manuscript in the typewriter (or press M) to review your draft; the diary remains a separate readable object. Each choice commits immediately. The third locks the ending. Replay from the end card.
-
-Progress is in memory only; refreshing starts a new run. This is a single-sitting demo. The target is 10–15 minutes of considered reading, but the present text can be finished faster; do not treat that duration as validated. No forced delays. The end card reports elapsed time and offers the four friend-test questions.
+Progress is kept in memory only, so refreshing starts a new run.
 
 ## Publish with GitHub Pages
 
@@ -57,20 +56,14 @@ Official references: [itch access control](https://itch.io/docs/creators/access-
 
 ## Scoring and content
 
-`story.js` holds all journal scraps, questions, responses, chapter choices, endings, and rules. Four sticky facts: a lamp at the grain house, the chapel key, the river rescue, and the stranger surviving without a pulse. Three scraps group those facts. Their accounts are intentionally incomplete, not an objective morality checklist.
+`story.js` holds the original scraps, questions, responses, chapter lines and endings, plus the rules. `asides.js` holds the horror layer: the stage directions that make him unsettling, the biographer's own stray thoughts, the deeds, and the nightfall scene.
 
-- Pin fire or key: Monster +1.
-- Pin rescue denial: Hero +1. Evidence can support him.
-- Believe an account: Hero +1 (a deliberate act of charitable trust, even when he condemns himself).
-- Let a statement slide: Nobody +1. Unasked questions add nothing.
-- Each written line: +2 to its internal tone. All three written lines in one tone can overcome all interview judgments.
-- Choices show only prose, with no morality labels or visible score tally. The final version is named only after the chapter is locked.
-- Highest total locks one chip. Ties follow the most recent written choice among the tied tones.
-- End percentages are explicitly marked illustrative: Hero 35%, Monster 42%, Nobody 23%. Nothing is collected.
+- Pin fire or key: Monster +1 and hunger +1. Pin the rescue denial: Hero +1.
+- Believe an account: Hero +1. Let a statement slide: no change.
+- Each written line: +2 to its tone. A Monster line also adds hunger +1. Watching the barkeep adds hunger +1; feeding adds 2.
+- The higher total names the chapter: Hero is **A good man**, Monster is **A psycho**. Ties follow the most recent written line.
 
-`scenery.js` composites Aseprite scene layers, four-frame rain/smoke sheets, and a localized mask for occasional bar-lamp flicker. Both the bar and writing room use native 480 × 240 artwork. The opening reveal and reduced-motion support are preserved. Editable sources and regeneration instructions are in [art/source](art/source/README.md). `style.css` scales the pixel UI chrome by a `--px` unit (3 px, 2 px on narrow screens, 4 px on wide ones) so frames, icons and type stay on one grid; the UI sprites come from `art/source/ui.lua`. `app.js` handles presentation and interaction; rules live separately so they can be tested without a browser.
-
-An optional [Aseprite + MCP art experiment](art/experiments/README.md) creates an editable bottle sprite and transparent PNG exports. Its development tools are separate from the browser game.
+`world3d.js` takes direction from the story through shots (`desk-parcel`, `desk`, `bar`, `table`, `prey`, `exit`, `shelf`), mood (hunger) and cues (`glitch`, `heartbeat`, `vanish`, nightfall). The stranger and the writer are built from the same figure: coat, wide-brimmed hat, and a face kept in shadow. The table lamp's cone is cut to the tabletop, so only his hands and the cigarette ember are ever lit. During nightfall the writer is replaced by a tall, wrapped thing with red eyes, seen from the barkeep's side of the counter. The parcel opens in three animated movements: the string goes slack, the lid comes off, and the diary and letter rise out. `scenery.js` keeps the pure timing curves for the lamp's voltage dips and the stranger's smoking rhythm. The legacy Aseprite sources in `art/` are kept; the journal still uses the evidence icons.
 
 ## Friend test
 
@@ -81,7 +74,7 @@ Send the link without explaining the interaction first. Ask afterward:
 - Did the chapter feel like your choice mattered?
 - Would you play a second night?
 
-Record completion time, the ending, where they hesitated, and what they thought the journal proved. The next content pass should respond to those observations. No extra nights, full identity reveal, cloud stats, inventory, VO, or engine migration are included in this POC.
+Record completion time, the ending, the barkeep's fate, when they first suspected the twist, and which version of him they believed. The next content pass should respond to those observations.
 
 ## Tailscale playtest
 

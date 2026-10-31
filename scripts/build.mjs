@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile, copyFile, readdir } from "node:fs/promises";
 import { dirname } from "node:path";
 // ZIP store format keeps the distributable reproducible and dependency-free.
-const files = ["index.html", "style.css", "app.js", "story.js", "scenery.js"];
+const files = ["index.html", "style.css", "app.js", "story.js", "asides.js", "scenery.js", "world3d.js", "audio.js", "vendor/three.module.min.js", "vendor/three-LICENSE.txt"];
 for (const name of (await readdir("assets")).sort()) {
   if (name.endsWith(".png")) files.push(`assets/${name}`);
 }
